@@ -3,11 +3,27 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Stride.Avalonia</RootNamespace>
-    <PackageId>Stride.Avalonia</PackageId>
-    <Description>Core bridge for rendering Avalonia UI inside a Stride 3D application via headless offscreen rendering.</Description>
-    <IsPackable>true</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- NuGet package metadata -->
+    <IsPackable>true</IsPackable>
+    <PackageId>Doprez.Stride.Avalonia</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Doprez</Authors>
+    <Description>Core bridge for rendering Avalonia UI inside a Stride 3D application via headless offscreen rendering. Supports fullscreen HUD overlays, world-space 3D panels, input forwarding, texture atlas batching, and profiling.</Description>
+    <PackageTags>stride;stride3d;avalonia;gamedev;ui;hud;overlay;3d</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Doprez/Doprez.Stride.Avalonia</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Doprez/Doprez.Stride.Avalonia.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>Copyright (c) 2026 Doprez</Copyright>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.*" />
