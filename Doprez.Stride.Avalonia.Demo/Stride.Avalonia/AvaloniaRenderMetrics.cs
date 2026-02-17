@@ -84,7 +84,7 @@ public sealed class AvaloniaRenderMetrics
     private int _benchmarkFrames;
     private double _benchmarkSumMs;
     private double _benchmarkPeakMs;
-    private int _benchmarkStutters; // frames > 2× avg
+    private int _benchmarkStutters; // frames > 2x avg
     private int _benchmarkGcDelta0, _benchmarkGcDelta1, _benchmarkGcDelta2;
     private int _benchmarkGcStart0, _benchmarkGcStart1, _benchmarkGcStart2;
 
@@ -270,7 +270,7 @@ public sealed class AvaloniaRenderMetrics
         Console.WriteLine($"║  Average FPS         : {avgFps,8:F1}                  ║");
         Console.WriteLine($"║  Avg frame time      : {avgMs,8:F3} ms                ║");
         Console.WriteLine($"║  Peak frame time     : {_benchmarkPeakMs,8:F3} ms                ║");
-        Console.WriteLine($"║  Stutters (>2× avg)  : {_benchmarkStutters,8}                  ║");
+        Console.WriteLine($"║  Stutters (>2x avg)  : {_benchmarkStutters,8}                  ║");
         Console.WriteLine($"║  Stutter rate        : {stutterPct,7:F2}%                   ║");
         Console.WriteLine("╠══════════════════════════════════════════════════════════╣");
         Console.WriteLine($"║  GC gen0 collections : {_benchmarkGcDelta0,8}                  ║");

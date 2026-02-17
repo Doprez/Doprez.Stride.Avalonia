@@ -4,7 +4,7 @@ A demo application showcasing the Stride.Avalonia bridge library. Demonstrates f
 
 ## What It Does
 
-- **1000 world-space panels** — `AvaloniaGridSpawner` creates a 10×10×10 grid of entities, each with a billboarded `AvaloniaComponent` displaying a `CounterLabel` control
+- **1000 world-space panels** — `AvaloniaGridSpawner` creates a 10x10x10 grid of entities, each with a billboarded `AvaloniaComponent` displaying a `CounterLabel` control
 - **Fullscreen debug overlay** — `DebugOverlayScript` attaches a `DebugPanel` showing real-time FPS, frame time, entity count, draw calls, memory, and detailed Avalonia rendering metrics
 - **Pause menu** — `EscapeMenuScript` toggles a fullscreen pause menu overlay when **Escape** is pressed, offering Resume, Settings, and Exit options. The Settings page lets you adjust the grid size, camera speeds, mouse sensitivity, sprint multiplier, window mode (windowed / fullscreen windowed / fullscreen exclusive), resolution, and resizable toggle — all applied at runtime
 - **Avalonia bootstrap** — `AvaloniaSetupScript` handles all initialization: boots the headless platform, registers the `AvaloniaSystem`, and injects the `AvaloniaSceneRenderer` into the graphics compositor

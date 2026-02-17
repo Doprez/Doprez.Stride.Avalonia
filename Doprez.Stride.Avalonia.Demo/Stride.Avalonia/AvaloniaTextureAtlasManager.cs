@@ -13,7 +13,7 @@ namespace Stride.Avalonia;
 /// hard cap on the number of atlas-backed panels that can be rendered.
 /// </summary>
 /// <remarks>
-/// Each atlas starts at 1024×1024 and grows independently up to 4096×4096.
+/// Each atlas starts at 1024x1024 and grows independently up to 4096x4096.
 /// A reverse-lookup dictionary maps each component to its owning atlas index
 /// for O(1) slot/texture lookups. When drawing, the caller groups panels by
 /// atlas index or breaks the sprite batch when the atlas changes in sorted
@@ -103,7 +103,7 @@ internal sealed class AvaloniaTextureAtlasManager : IDisposable
         // If a single panel is larger than MaxAtlasSize this will fail.
         if (!_loggedFullWarning)
         {
-            _log.Warning($"Panel ({width}×{height}) exceeds maximum atlas size " +
+            _log.Warning($"Panel ({width}x{height}) exceeds maximum atlas size " +
                           $"({AvaloniaTextureAtlas.MaxAtlasSize}) — cannot allocate");
             _loggedFullWarning = true;
         }

@@ -26,12 +26,12 @@ Core bridge library that enables rendering Avalonia UI controls inside the Strid
 
 ### Texture Atlas System
 - **Shelf-based texture packer** — multiple world-space panels packed into shared atlas textures
-- **Auto-growth** — starts at 1024×1024, grows up to 4096×4096 by doubling and GPU `CopyRegion`
+- **Auto-growth** — starts at 1024x1024, grows up to 4096x4096 by doubling and GPU `CopyRegion`
 - **Batched draw calls** — one draw call per atlas instead of one per panel
 - **Managed via `AvaloniaTextureAtlasManager`** — handles multiple atlases with O(1) reverse lookup
 
 ### Performance
-- **Zero-allocation input bridge** — `AvaloniaInputBridge` uses compiled expression delegates to call `PlatformImpl.Input` directly, bypassing `HeadlessWindowExtensions` which runs jobs 20× per event
+- **Zero-allocation input bridge** — `AvaloniaInputBridge` uses compiled expression delegates to call `PlatformImpl.Input` directly, bypassing `HeadlessWindowExtensions` which runs jobs 20x per event
 - **Direct framebuffer access** — reflection-based shortcut avoids LOH allocations
 - **Dirty-update throttling** — `MaxDirtyUpdatesPerFrame` on `AvaloniaSceneRenderer` limits GPU texture uploads per frame
 

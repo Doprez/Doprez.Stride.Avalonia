@@ -126,7 +126,7 @@ public abstract class AvaloniaPage : IDisposable
     /// <c>CaptureRenderedFrame()</c> internally calls
     /// <c>HeadlessWindowImpl.GetLastRenderedFrame()</c> which creates a
     /// <b>brand-new</b> <see cref="WriteableBitmap"/> copy of the internal
-    /// framebuffer on every call.  For a 1280×720 panel that is ~3.5 MB —
+    /// framebuffer on every call.  For a 1280x720 panel that is ~3.5 MB —
     /// large enough to land on the Large-Object Heap and trigger gen-2 GC
     /// pauses (visible as frame stutters).
     /// </para>

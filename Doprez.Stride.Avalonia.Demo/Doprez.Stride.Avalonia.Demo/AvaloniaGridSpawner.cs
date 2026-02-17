@@ -7,7 +7,7 @@ using Stride.Avalonia;
 namespace Doprez.Stride.Avalonia.Demo;
 
 /// <summary>
-/// Spawns entities in an N×N×N 3D grid, each with a billboarded
+/// Spawns entities in an NxNxN 3D grid, each with a billboarded
 /// <see cref="AvaloniaComponent"/> displaying a <see cref="CounterLabel"/>
 /// that shows the entity's index.
 /// <para>
@@ -22,7 +22,7 @@ public class AvaloniaGridSpawner : SyncScript
     public float Spacing { get; set; } = 2.5f;
 
     /// <summary>
-    /// Dimension of the grid (N×N×N). Changing this value and calling
+    /// Dimension of the grid (NxNxN). Changing this value and calling
     /// <see cref="Respawn"/> will destroy existing panels and recreate
     /// the grid with the new size.
     /// </summary>

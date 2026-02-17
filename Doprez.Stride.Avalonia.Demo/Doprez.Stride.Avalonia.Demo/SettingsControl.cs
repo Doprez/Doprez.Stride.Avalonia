@@ -41,7 +41,7 @@ public class SettingsControl : UserControl
     /// <summary>Raised when the Back button is clicked.</summary>
     public event Action? BackClicked;
 
-    /// <summary>Raised when the grid size slider value changes. The int is the new grid dimension (N×N×N).</summary>
+    /// <summary>Raised when the grid size slider value changes. The int is the new grid dimension (NxNxN).</summary>
     public event Action<int>? GridSizeChanged;
 
     /// <summary>Raised when camera movement speed changes.</summary>
@@ -90,7 +90,7 @@ public class SettingsControl : UserControl
 
         var sceneSection = MakeSection("Scene UI", new Control[]
         {
-            MakeLabeledRow("Grid Size (N×N×N)", _gridSizeSlider, _gridSizeLabel),
+            MakeLabeledRow("Grid Size (NxNxN)", _gridSizeSlider, _gridSizeLabel),
         });
 
         // ═══════ Camera Controls section ════════════════════════════
@@ -192,12 +192,12 @@ public class SettingsControl : UserControl
             MinWidth = 220,
             ItemsSource = new[]
             {
-                "1280 × 720",
-                "1366 × 768",
-                "1600 × 900",
-                "1920 × 1080",
-                "2560 × 1440",
-                "3840 × 2160",
+                "1280 x 720",
+                "1366 x 768",
+                "1600 x 900",
+                "1920 x 1080",
+                "2560 x 1440",
+                "3840 x 2160",
             },
             SelectedIndex = 0,
         };
@@ -205,7 +205,7 @@ public class SettingsControl : UserControl
         {
             if (_resolutionCombo.SelectedItem is string res)
             {
-                var parts = res.Replace(" ", "").Split('×');
+                var parts = res.Replace(" ", "").Split('x');
                 if (parts.Length == 2
                     && int.TryParse(parts[0], out int w)
                     && int.TryParse(parts[1], out int h))
@@ -301,7 +301,7 @@ public class SettingsControl : UserControl
     /// <summary>Sets the resolution combo box to the nearest matching entry.</summary>
     public void SetResolution(int width, int height)
     {
-        string target = $"{width} × {height}";
+        string target = $"{width} x {height}";
         for (int i = 0; i < (_resolutionCombo.ItemsSource as string[])!.Length; i++)
         {
             if ((_resolutionCombo.ItemsSource as string[])![i] == target)
@@ -335,7 +335,7 @@ public class SettingsControl : UserControl
 
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(80, 40, 40, 50)),
+            Background = new SolidColorBrush(Color.FromArgb(255, 40, 40, 50)),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(16, 12),
             Child = panel,

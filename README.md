@@ -26,8 +26,8 @@ The repository also includes a dockable editor shell (hierarchy, properties insp
 - **3D panel ray-casting** — mouse interaction with world-space panels via ray-cast hit testing
 
 ### Performance
-- **Texture atlas batching** — multiple world-space panels packed into shared atlas textures for batched GPU draw calls; auto-growth up to 4096×4096
-- **Zero-allocation input bridge** — compiled expression delegates bypass Avalonia's internal job scheduling (20× calls per event avoided)
+- **Texture atlas batching** — multiple world-space panels packed into shared atlas textures for batched GPU draw calls; auto-growth up to 4096x4096
+- **Zero-allocation input bridge** — compiled expression delegates bypass Avalonia's internal job scheduling (20x calls per event avoided)
 - **Direct framebuffer access** — reflection-based access to `HeadlessWindowImpl._lastRenderedFrame` avoids LOH allocations from `CaptureRenderedFrame()`
 - **Dirty-update throttling** — configurable `MaxDirtyUpdatesPerFrame` limits GPU uploads per frame
 - **Frustum culling** — AABB-based culling for world-space panels
@@ -174,7 +174,7 @@ cd Doprez.Stride.Avalonia.Demo
 dotnet run --project Doprez.Stride.Avalonia.Demo.Linux
 ```
 
-The demo spawns 1000 billboarded world-space Avalonia panels in a 10×10×10 grid plus a fullscreen debug overlay with real-time performance metrics. Press **Escape** to open the pause menu, which provides Resume, Settings (grid size, camera speeds, mouse sensitivity, window mode, resolution), and Exit. Use **F3** to dump metrics, **F4** to run a benchmark, and **F5** for extended benchmark.
+The demo spawns 1000 billboarded world-space Avalonia panels in a 10x10x10 grid plus a fullscreen debug overlay with real-time performance metrics. Press **Escape** to open the pause menu, which provides Resume, Settings (grid size, camera speeds, mouse sensitivity, window mode, resolution), and Exit. Use **F3** to dump metrics, **F4** to run a benchmark, and **F5** for extended benchmark.
 
 ## Running the Stress Test
 

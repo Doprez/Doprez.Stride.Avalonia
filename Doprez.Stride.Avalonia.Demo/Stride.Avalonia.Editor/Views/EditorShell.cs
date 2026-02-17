@@ -224,7 +224,7 @@ public class EditorShell : UserControl
         var size = _viewportBorder.Bounds.Size;
 
         // The viewport is visible when the border is in the visual tree and
-        // has a non-zero layout size (collapsed/hidden tabs report 0×0).
+        // has a non-zero layout size (collapsed/hidden tabs report 0x0).
         bool isVisible = _viewportBorder.IsVisible
                       && size.Width > 0
                       && size.Height > 0;

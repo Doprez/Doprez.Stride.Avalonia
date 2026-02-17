@@ -25,7 +25,7 @@ public class CounterLabel : UserControl
 
         Content = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(180, 30, 30, 30)),
+            Background = new SolidColorBrush(Color.FromArgb(128, 30, 30, 30)),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8, 4),
             Child = _label,
