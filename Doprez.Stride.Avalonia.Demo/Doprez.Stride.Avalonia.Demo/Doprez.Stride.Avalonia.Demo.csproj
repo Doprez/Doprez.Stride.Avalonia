@@ -14,6 +14,7 @@
     <PackageReference Include="Stride.UI" Version="4.3.0.2507" />
 
     <PackageReference Include="Stride.Core.Assets.CompilerApp" Version="4.3.0.2507" IncludeAssets="build;buildTransitive" />
+    <PackageReference Include="Stride.Shaders.Compiler" Version="4.3.0.2507" />
   </ItemGroup>
 
   <ItemGroup>

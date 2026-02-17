@@ -67,8 +67,9 @@ public class AvaloniaGridSpawner : SyncScript
                     {
                         IsFullScreen = false,
                         IsBillboard = true,
-                        Resolution = new Vector2(128, 48),
+                        Resolution = new Vector2(84, 28),
                         Size = new Vector2(0.5f, 0.19f),
+                        UseAtlas = true,
                     };
                     avaloniaComponent.Page = page;
 

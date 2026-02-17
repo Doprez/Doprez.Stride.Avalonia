@@ -174,7 +174,7 @@ cd Doprez.Stride.Avalonia.Demo
 dotnet run --project Doprez.Stride.Avalonia.Demo.Linux
 ```
 
-The demo spawns 1000 billboarded world-space Avalonia panels in a 10×10×10 grid plus a fullscreen debug overlay with real-time performance metrics. Use **F3** to dump metrics, **F4** to run a benchmark, and **F5** for extended benchmark.
+The demo spawns 1000 billboarded world-space Avalonia panels in a 10×10×10 grid plus a fullscreen debug overlay with real-time performance metrics. Press **Escape** to open the pause menu, which provides Resume, Settings (grid size, camera speeds, mouse sensitivity, window mode, resolution), and Exit. Use **F3** to dump metrics, **F4** to run a benchmark, and **F5** for extended benchmark.
 
 ## Running the Stress Test
 
