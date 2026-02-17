@@ -196,6 +196,6 @@ The core `Stride.Avalonia` and `Stride.Avalonia.Editor.Controls` libraries targe
 
 Demos:
 
-https://youtu.be/wfMYdvH_ux4
-https://youtu.be/_pIj4hAt25M
+- https://youtu.be/wfMYdvH_ux4
+- https://youtu.be/_pIj4hAt25M
 
