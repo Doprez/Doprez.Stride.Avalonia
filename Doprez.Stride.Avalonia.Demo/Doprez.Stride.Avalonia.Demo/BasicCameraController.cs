@@ -22,6 +22,13 @@ public class BasicCameraController : SyncScript
     private float yaw;
     private float pitch;
 
+    /// <summary>
+    /// When <c>false</c>, the controller stops processing input and
+    /// updating the entity transform. Used by the escape menu to
+    /// freeze the camera while the menu is open.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
     public bool Gamepad { get; set; } = false;
 
     public Vector3 KeyboardMovementSpeed { get; set; } = new Vector3(5.0f);
@@ -53,6 +60,8 @@ public class BasicCameraController : SyncScript
 
     public override void Update()
     {
+        if (!IsActive) return;
+
         ProcessInput();
         UpdateTransform();
     }

@@ -14,6 +14,7 @@ Hierarchy:
         - ref!! 62200459-5253-408a-9483-6b494de141f4
         - ref!! a1b2c3d4-5678-9abc-def0-111111111111
         - ref!! a1b2c3d4-5678-9abc-def0-222222222222
+        - ref!! e5ca0e01-ae5c-4a0e-b001-e5ca0e01ee01
     Parts:
         -   Entity:
                 Id: 29493c18-fa56-42a1-b65b-f156656bdb11
@@ -123,6 +124,20 @@ Hierarchy:
                         Id: f1f1f1f1-f1f1-f1f1-f1f1-f1f1f1f1f1f1
                         ShowMinMaxFps: true
                         ShowAvaloniaPerfMetrics: true
+        -   Entity:
+                Id: e5ca0e01-ae5c-4a0e-b001-e5ca0e01ee01
+                Name: EscapeMenu
+                Components:
+                    ea0ea0ea0ea0ea0ea0ea0ea0ea0ea0ea: !TransformComponent
+                        Id: fa0fa0fa-fa0f-a0fa-0fa0-fa0fa0fa0fa0
+                        Position: {X: 0.0, Y: 0.0, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    eb0eb0eb0eb0eb0eb0eb0eb0eb0eb0eb: !Doprez.Stride.Avalonia.Demo.EscapeMenuScript,Doprez.Stride.Avalonia.Demo
+                        Id: fb0fb0fb-fb0f-b0fb-0fb0-fb0fb0fb0fb0
+                        CameraController: ref!! 0f8ab7c5-3567-486c-a933-76c08cf9dfad
+                        GridSpawner: ref!! e083e5c5-2b81-4d57-9454-66d9344e6a73
         -   Entity:
                 Id: c8913191-d39a-4388-8d48-71d0f2d128d1
                 Name: Directional light

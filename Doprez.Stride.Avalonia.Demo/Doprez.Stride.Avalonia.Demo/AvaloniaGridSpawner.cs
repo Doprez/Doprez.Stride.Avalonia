@@ -7,9 +7,13 @@ using Stride.Avalonia;
 namespace Doprez.Stride.Avalonia.Demo;
 
 /// <summary>
-/// Spawns 1000 entities in a 10×10×10 3D grid, each with a billboarded
+/// Spawns entities in an N×N×N 3D grid, each with a billboarded
 /// <see cref="AvaloniaComponent"/> displaying a <see cref="CounterLabel"/>
 /// that shows the entity's index.
+/// <para>
+/// The <see cref="GridSize"/> property (default 10) controls the dimension
+/// of the cube and can be changed at runtime via <see cref="Respawn"/>.
+/// </para>
 /// </summary>
 public class AvaloniaGridSpawner : SyncScript
 {
@@ -17,11 +21,34 @@ public class AvaloniaGridSpawner : SyncScript
     [DataMember(10)]
     public float Spacing { get; set; } = 2.5f;
 
+    /// <summary>
+    /// Dimension of the grid (N×N×N). Changing this value and calling
+    /// <see cref="Respawn"/> will destroy existing panels and recreate
+    /// the grid with the new size.
+    /// </summary>
+    [DataMember(20)]
+    public int GridSize { get; set; } = 10;
+
     private readonly List<Entity> _spawnedEntities = new();
 
     public override void Start()
     {
-        const int gridSize = 10;
+        SpawnGrid();
+    }
+
+    /// <summary>
+    /// Destroys the current grid and recreates it with the current
+    /// <see cref="GridSize"/> value.
+    /// </summary>
+    public void Respawn()
+    {
+        DespawnGrid();
+        SpawnGrid();
+    }
+
+    private void SpawnGrid()
+    {
+        int gridSize = GridSize;
         float offset = (gridSize - 1) * 0.5f;
         int count = 0;
 
@@ -63,11 +90,7 @@ public class AvaloniaGridSpawner : SyncScript
         }
     }
 
-    public override void Update()
-    {
-    }
-
-    public override void Cancel()
+    private void DespawnGrid()
     {
         foreach (var entity in _spawnedEntities)
         {
@@ -76,5 +99,14 @@ public class AvaloniaGridSpawner : SyncScript
             Entity.Scene.Entities.Remove(entity);
         }
         _spawnedEntities.Clear();
+    }
+
+    public override void Update()
+    {
+    }
+
+    public override void Cancel()
+    {
+        DespawnGrid();
     }
 }

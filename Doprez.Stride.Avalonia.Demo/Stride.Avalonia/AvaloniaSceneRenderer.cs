@@ -370,20 +370,32 @@ public class AvaloniaSceneRenderer : SceneRendererBase
         AvaloniaComponent comp, WriteableBitmap bitmap,
         CommandList commandList, int width, int height)
     {
+        using var fb = bitmap.Lock();
+
+        // Use the bitmap's actual dimensions to avoid size mismatches
+        // during window resize (the bitmap may still reflect the old size).
+        int bmpW = fb.Size.Width;
+        int bmpH = fb.Size.Height;
+        if (bmpW <= 0 || bmpH <= 0) return null;
+
+        int expectedBytes = bmpW * bmpH * 4; // R8G8B8A8 = 4 bytes/pixel
+        int dataSize = fb.RowBytes * bmpH;
+
         if (!_textures.TryGetValue(comp, out var texture)
-            || texture.Width != width || texture.Height != height)
+            || texture.Width != bmpW || texture.Height != bmpH)
         {
             texture?.Dispose();
             texture = Texture.New2D(
-                GraphicsDevice, width, height,
+                GraphicsDevice, bmpW, bmpH,
                 PixelFormat.R8G8B8A8_UNorm_SRgb,
                 TextureFlags.ShaderResource,
                 usage: GraphicsResourceUsage.Default);
             _textures[comp] = texture;
         }
 
-        using var fb = bitmap.Lock();
-        int dataSize = fb.RowBytes * fb.Size.Height;
+        // Guard: only upload when the bitmap data size matches the texture.
+        // A stride mismatch (RowBytes != width * 4) would also cause issues.
+        if (dataSize < expectedBytes) return texture;
 
         texture.SetData(commandList,
             new DataPointer(fb.Address, dataSize));

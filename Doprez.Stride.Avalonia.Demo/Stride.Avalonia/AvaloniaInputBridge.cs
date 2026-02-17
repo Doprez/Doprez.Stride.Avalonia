@@ -1,6 +1,8 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Input;
@@ -35,10 +37,21 @@ namespace Stride.Avalonia;
 /// </summary>
 internal static class AvaloniaInputBridge
 {
-    // ── One-time lazy initialisation ─────────────────────────────
+    // ── Per-window mouse devices ──────────────────────────────────
+    //
+    // Each Window gets its own MouseDevice (and therefore its own
+    // Pointer instance).  This isolates pointer capture per-window
+    // so that a PointerReleased sent to Window A cannot clear the
+    // capture that was set by a PointerPressed on Window B.
+    //
+    // Without this isolation, having multiple fullscreen components
+    // (e.g. debug overlay + escape menu) causes the shared Pointer's
+    // capture to be released by the wrong window, preventing button
+    // Click events from ever firing.
 
-    /// <summary>Shared <c>MouseDevice</c> created via internal constructor.</summary>
-    private static readonly Lazy<IInputDevice> _mouseDevice = new(CreateMouseDevice);
+    private static int _nextPointerId;
+    private static readonly ConditionalWeakTable<Window, IInputDevice> _mouseDevices = new();
+    private static ConstructorInfo? _mouseDeviceCtor;
 
     /// <summary>Compiled delegate: <c>new RawPointerEventArgs(...)</c>.</summary>
     private static readonly Lazy<Func<IInputDevice, ulong, IInputRoot,
@@ -60,7 +73,7 @@ internal static class AvaloniaInputBridge
         if (callback == null) return;
 
         callback(_makePointerArgs.Value(
-            _mouseDevice.Value, Timestamp, (IInputRoot)window,
+            GetOrCreateMouseDevice(window), Timestamp, (IInputRoot)window,
             RawPointerEventType.Move, position, modifiers));
     }
 
@@ -74,7 +87,7 @@ internal static class AvaloniaInputBridge
         if (callback == null) return;
 
         callback(_makePointerArgs.Value(
-            _mouseDevice.Value, Timestamp, (IInputRoot)window,
+            GetOrCreateMouseDevice(window), Timestamp, (IInputRoot)window,
             type, position, modifiers));
     }
 
@@ -88,7 +101,7 @@ internal static class AvaloniaInputBridge
         if (callback == null) return;
 
         callback(_makePointerArgs.Value(
-            _mouseDevice.Value, Timestamp, (IInputRoot)window,
+            GetOrCreateMouseDevice(window), Timestamp, (IInputRoot)window,
             type, position, modifiers));
     }
 
@@ -99,7 +112,7 @@ internal static class AvaloniaInputBridge
         if (callback == null) return;
 
         callback(_makeWheelArgs.Value(
-            _mouseDevice.Value, Timestamp, (IInputRoot)window,
+            GetOrCreateMouseDevice(window), Timestamp, (IInputRoot)window,
             position, delta, modifiers));
     }
 
@@ -130,20 +143,24 @@ internal static class AvaloniaInputBridge
         return _cachedCallback;
     }
 
-    // ── Reflection: construct MouseDevice ────────────────────────
+    // ── Per-window MouseDevice factory ────────────────────────────
 
-    private static IInputDevice CreateMouseDevice()
+    private static IInputDevice GetOrCreateMouseDevice(Window window)
     {
-        var pointer = new global::Avalonia.Input.Pointer(0, PointerType.Mouse, true);
+        return _mouseDevices.GetValue(window, static _ =>
+        {
+            int id = Interlocked.Increment(ref _nextPointerId);
+            var pointer = new global::Avalonia.Input.Pointer(id, PointerType.Mouse, true);
 
-        var ctor = typeof(MouseDevice).GetConstructor(
-            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance,
-            null, [typeof(global::Avalonia.Input.Pointer)], null)
-            ?? throw new InvalidOperationException(
-                "MouseDevice(Pointer) constructor not found. " +
-                "Avalonia internals may have changed.");
+            _mouseDeviceCtor ??= typeof(MouseDevice).GetConstructor(
+                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance,
+                null, [typeof(global::Avalonia.Input.Pointer)], null)
+                ?? throw new InvalidOperationException(
+                    "MouseDevice(Pointer) constructor not found. " +
+                    "Avalonia internals may have changed.");
 
-        return (IInputDevice)ctor.Invoke([pointer]);
+            return (IInputDevice)_mouseDeviceCtor.Invoke([pointer]);
+        });
     }
 
     // ── Compiled delegates for internal constructors ─────────────
