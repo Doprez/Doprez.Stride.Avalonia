@@ -1,5 +1,8 @@
 # Doprez.Stride.Avalonia
 
+[![Build and Publish to NuGet](https://github.com/Doprez/Doprez.Stride.Avalonia/actions/workflows/build-and-publish.yml/badge.svg)](https://github.com/Doprez/Doprez.Stride.Avalonia/actions/workflows/build-and-publish.yml)
+[![NuGet](https://img.shields.io/nuget/v/Doprez.Stride.Avalonia.svg)](https://www.nuget.org/packages/Doprez.Stride.Avalonia)
+
 A bridge library that renders [Avalonia UI](https://avaloniaui.net/) controls inside the [Stride 3D game engine](https://www.stride3d.net/). It uses Avalonia's headless (offscreen) rendering via Skia to capture UI frames as bitmaps, uploads them as GPU textures, and draws them in the Stride scene — either as fullscreen HUD overlays or as world-space 3D panels.
 
 The repository also includes a dockable editor shell (hierarchy, properties inspector, viewport) built entirely with Avalonia, plus a comprehensive set of property editor controls for inspecting Stride components at runtime.
