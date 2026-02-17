@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Stride.Avalonia.Editor.Controls</RootNamespace>
+    <PackageId>Stride.Avalonia.Editor.Controls</PackageId>
+    <Description>Property editor controls and reflection-based component inspector for Stride entities using Avalonia UI.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.*" />
+    <PackageReference Include="FluentAvaloniaUI" Version="2.*" />
+    <PackageReference Include="ThemeEditor.Controls.ColorPicker" Version="11.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Stride.Engine" Version="4.3.0.2507" PrivateAssets="contentfiles;analyzers" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stride.Avalonia\Stride.Avalonia.csproj" />
+  </ItemGroup>
+
+</Project>

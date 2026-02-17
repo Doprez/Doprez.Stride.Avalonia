@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Stride.Avalonia.Editor</RootNamespace>
+    <PackageId>Stride.Avalonia.Editor</PackageId>
+    <Description>Dockable editor shell with hierarchy, properties, and viewport views for Stride Engine using Avalonia UI and Dock.Avalonia.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.*" />
+    <PackageReference Include="FluentAvaloniaUI" Version="2.*" />
+    <PackageReference Include="Dock.Avalonia" Version="11.3.*" />
+    <PackageReference Include="Dock.Model.Avalonia" Version="11.3.*" />
+    <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="11.3.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Stride.Engine" Version="4.3.0.2507" PrivateAssets="contentfiles;analyzers" />
+    <PackageReference Include="Stride.Rendering" Version="4.3.0.2507" PrivateAssets="contentfiles;analyzers" />
+    <PackageReference Include="Stride.Graphics" Version="4.3.0.2507" PrivateAssets="contentfiles;analyzers" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stride.Avalonia\Stride.Avalonia.csproj" />
+    <ProjectReference Include="..\Stride.Avalonia.Editor.Controls\Stride.Avalonia.Editor.Controls.csproj" />
+  </ItemGroup>
+
+</Project>

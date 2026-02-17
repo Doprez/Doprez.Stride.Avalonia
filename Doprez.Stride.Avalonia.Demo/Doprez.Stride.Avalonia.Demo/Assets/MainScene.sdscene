@@ -1,0 +1,150 @@
+!SceneAsset
+Id: 934d5314-dfe0-4a29-92f8-9c7831a7800a
+SerializedVersion: {Stride: 3.1.0.1}
+Tags: []
+ChildrenIds: []
+Offset: {X: 0.0, Y: 0.0, Z: 0.0}
+Hierarchy:
+    RootParts:
+        - ref!! 8e048adf-50ee-4ce2-9e10-0c7223b3369d
+        - ref!! c8913191-d39a-4388-8d48-71d0f2d128d1
+        - ref!! 29493c18-fa56-42a1-b65b-f156656bdb11
+        - ref!! 833c0ca1-3e40-4b8c-956b-b9c025b0a38a
+        - ref!! 398ec687-3731-4d1b-b3c0-9d092a08c591
+        - ref!! 62200459-5253-408a-9483-6b494de141f4
+        - ref!! a1b2c3d4-5678-9abc-def0-111111111111
+        - ref!! a1b2c3d4-5678-9abc-def0-222222222222
+    Parts:
+        -   Entity:
+                Id: 29493c18-fa56-42a1-b65b-f156656bdb11
+                Name: Skybox
+                Components:
+                    4ff8df364e26caf3cfb7af2a980b55c8: !TransformComponent
+                        Id: c0a6886f-c752-4f82-8abc-660f0a5b37db
+                        Position: {X: 0.0, Y: 2.0, Z: -2.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    e0c3d913ee6fe942fb90b633bf0b3081: !BackgroundComponent
+                        Id: 0f1f16b0-71a1-4ef5-816d-903c2040fb68
+                        Texture: efbe3889-4355-49a0-b8cb-bac9dd55cca7:Skybox texture
+                    0f6a05882217763b3fc882fefdf8fa95: !LightComponent
+                        Id: 66bac7e9-6a41-41af-9fc1-37e0b53388d1
+                        Type: !LightSkybox
+                            Skybox: 1fb7fbed-6b0a-4fe0-be4d-27e2120d9aba:Skybox
+        -   Entity:
+                Id: 398ec687-3731-4d1b-b3c0-9d092a08c591
+                Name: Sphere
+                Components:
+                    a9f9a7ccce2e8f6f7138b207744072bf: !TransformComponent
+                        Id: 6a024adf-dae4-4f3e-8d79-61fcfe14272d
+                        Position: {X: 0.0, Y: 0.5, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    1714ab4ac2f488b7121151351f63963e: !ModelComponent
+                        Id: 7e51341d-1a1c-438b-9a0d-ac9374d38d34
+                        Model: b121710b-4563-48d5-9836-61067b5d3381:Sphere
+                        Materials: {}
+        -   Entity:
+                Id: 62200459-5253-408a-9483-6b494de141f4
+                Name: Entity
+                Components:
+                    84702b1342a680c8215d86ea8f69573b: !TransformComponent
+                        Id: c251cdab-42ad-4316-b075-de4f295c8445
+                        Position: {X: 0.0, Y: 1.1875995, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    9eefd199759e586fc994c735e270d811: !Doprez.Stride.Avalonia.Demo.AvaloniaGridSpawner,Doprez.Stride.Avalonia.Demo
+                        Id: e083e5c5-2b81-4d57-9454-66d9344e6a73
+                        Spacing: 2.5
+        -   Entity:
+                Id: 833c0ca1-3e40-4b8c-956b-b9c025b0a38a
+                Name: Ground
+                Components:
+                    a46678303b83219becd3508417b1181c: !TransformComponent
+                        Id: 32eb29d6-fd9a-40ae-a951-46a5e2ffbe07
+                        Position: {X: 0.0, Y: 0.0, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    df13aa80f59e4c12a21bb5abe495beb1: !ModelComponent
+                        Id: 886e3400-21d1-4329-a5cc-c307c0e3cdf5
+                        Model: 0b38e725-abd6-4814-8dcb-cbf6dd1c6d0e:Ground
+                        Materials: {}
+        -   Entity:
+                Id: 8e048adf-50ee-4ce2-9e10-0c7223b3369d
+                Name: Camera
+                Components:
+                    629a646df5b3995ccbe546529fadf513: !TransformComponent
+                        Id: 0b832835-0267-402c-999a-8cee9597f125
+                        Position: {X: 2.6, Y: 0.6, Z: -1.0}
+                        Rotation: {X: 0.0, Y: 0.82903755, Z: 0.0, W: 0.5591929}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    8041df89d41c62955fddce6cc525ce48: !CameraComponent
+                        Id: 4ea5af7a-3d45-44c3-8553-539422765d19
+                        Name: null
+                        Projection: Perspective
+                        Slot: 1b0cc709-8965-48b1-a2e3-774dffed9b9a
+                    f6385f72a6d7c40eba92760bb983a498: !Doprez.Stride.Avalonia.Demo.BasicCameraController,Doprez.Stride.Avalonia.Demo
+                        Id: 0f8ab7c5-3567-486c-a933-76c08cf9dfad
+                        Gamepad: false
+                        KeyboardMovementSpeed: {X: 5.0, Y: 5.0, Z: 5.0}
+                        TouchMovementSpeed: {X: 0.7, Y: 0.7, Z: 0.3}
+                        SpeedFactor: 5.0
+                        KeyboardRotationSpeed: {X: 3.0, Y: 3.0}
+                        MouseRotationSpeed: {X: 1.0, Y: 1.0}
+                        TouchRotationSpeed: {X: 1.0, Y: 0.7}
+        -   Entity:
+                Id: a1b2c3d4-5678-9abc-def0-111111111111
+                Name: AvaloniaSetup
+                Components:
+                    a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0: !TransformComponent
+                        Id: b0b0b0b0-b0b0-b0b0-b0b0-b0b0b0b0b0b0
+                        Position: {X: 0.0, Y: 0.0, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1: !Doprez.Stride.Avalonia.Demo.AvaloniaSetupScript,Doprez.Stride.Avalonia.Demo
+                        Id: c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1
+        -   Entity:
+                Id: a1b2c3d4-5678-9abc-def0-222222222222
+                Name: DebugOverlay
+                Components:
+                    d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0: !TransformComponent
+                        Id: e0e0e0e0-e0e0-e0e0-e0e0-e0e0e0e0e0e0
+                        Position: {X: 0.0, Y: 0.0, Z: 0.0}
+                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1: !Doprez.Stride.Avalonia.Demo.DebugOverlayScript,Doprez.Stride.Avalonia.Demo
+                        Id: f1f1f1f1-f1f1-f1f1-f1f1-f1f1f1f1f1f1
+                        ShowMinMaxFps: true
+                        ShowAvaloniaPerfMetrics: true
+        -   Entity:
+                Id: c8913191-d39a-4388-8d48-71d0f2d128d1
+                Name: Directional light
+                Components:
+                    156a16ab37c37dedc53e03dcf21fb787: !TransformComponent
+                        Id: d8b8699e-06e8-4678-9040-e4dba0eff1a8
+                        Position: {X: 0.0, Y: 2.0, Z: 0.0}
+                        Rotation: {X: 1.131334E-08, Y: -0.9659258, Z: -0.25881904, W: -4.222196E-08}
+                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
+                        Children: {}
+                    53977adc505f48078f2e72812630405e: !LightComponent
+                        Id: e668d7d3-e06f-4f8a-b708-2678320388b6
+                        Type: !LightDirectional
+                            Color: !ColorRgbProvider
+                                Value: {R: 1.0, G: 1.0, B: 1.0}
+                            Shadow:
+                                Enabled: true
+                                Filter: !LightShadowMapFilterTypePcf
+                                    FilterSize: Filter5x5
+                                Size: Large
+                                DepthRange: {}
+                                PartitionMode: !LightDirectionalShadowMap.PartitionLogarithmic {}
+                                ComputeTransmittance: false
+                                BiasParameters: {}
+                        Intensity: 20.0
