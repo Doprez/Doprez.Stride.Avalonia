@@ -194,6 +194,8 @@ Spawns 1000 panels in batches of 50/frame, measures uncapped FPS over 10 seconds
 
 The core `Stride.Avalonia` and `Stride.Avalonia.Editor.Controls` libraries target `net10.0` and are platform-agnostic. The editor shell (`Stride.Avalonia.Editor`) targets `net10.0-windows` due to Dock.Avalonia dependencies.
 
-## License
+Demos:
 
-[MIT](LICENSE) — Copyright 2026 Doprez
+https://youtu.be/wfMYdvH_ux4
+https://youtu.be/_pIj4hAt25M
+
