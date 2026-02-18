@@ -43,10 +43,19 @@ public class AvaloniaSceneRenderer : SceneRendererBase
     private bool _hasCameraMatrices;
     private Vector3 _sortCameraPos;
 
+    // Round-robin state for spreading ContinuousRedraw updates across frames.
+    private int _frameCounter;
+    private int _lastContinuousRedrawCount;
+
     /// <summary>
     /// Maximum number of dirty textures to re-capture and upload per frame.
     /// Spreads burst updates over multiple frames to prevent FPS spikes.
     /// Set to 0 for unlimited (default behaviour).
+    /// <para>
+    /// For panels with <see cref="AvaloniaComponent.ContinuousRedraw"/> enabled,
+    /// updates are spread across frames using round-robin instead of a hard cap,
+    /// so that all panels cycle through updates evenly.
+    /// </para>
     /// </summary>
     public int MaxDirtyUpdatesPerFrame { get; set; } = 50;
 
@@ -102,6 +111,16 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
         int dirtyUpdatesThisFrame = 0;
         int dirtyLimit = MaxDirtyUpdatesPerFrame > 0 ? MaxDirtyUpdatesPerFrame : int.MaxValue;
+
+        // Round-robin: spread ContinuousRedraw re-captures evenly across frames.
+        // spreadFactor = how many frames it takes to cycle through all of them.
+        _frameCounter++;
+        int spreadFactor = dirtyLimit < int.MaxValue
+            ? Math.Max(1, (_lastContinuousRedrawCount + dirtyLimit - 1) / dirtyLimit)
+            : 1;
+        int frameSlot = _frameCounter % spreadFactor;
+        int continuousRedrawOrdinal = 0;
+
         int panelsDrawn = 0;
         int panelsCulled = 0;
         int panelsDirtyUpdated = 0;
@@ -153,9 +172,34 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
             bool wasDirty = comp.Page.IsDirty;
 
-            // Throttle: if this panel is dirty but we've already hit the
-            // per-frame budget, skip the re-capture and reuse the old texture.
-            bool shouldCapture = !wasDirty || dirtyUpdatesThisFrame < dirtyLimit || comp.IsFullScreen;
+            // Check whether this panel already has a rendered texture.
+            // Panels that have never been captured must always be allowed
+            // through regardless of the dirty budget — otherwise
+            // ContinuousRedraw panels can monopolise the budget and
+            // prevent other panels from ever getting their first capture.
+            bool hasExistingTexture = comp.IsFullScreen || !comp.UseAtlas
+                ? _textures.ContainsKey(comp)
+                : _atlasManager!.TryGetSourceRect(comp, out _, out _);
+
+            // Decide whether to (re-)capture this panel's frame.
+            bool shouldCapture;
+            if (!wasDirty || comp.IsFullScreen || !hasExistingTexture)
+            {
+                // Not dirty, fullscreen, or first-ever capture → always allow.
+                shouldCapture = true;
+            }
+            else if (comp.ContinuousRedraw)
+            {
+                // ContinuousRedraw panels: round-robin so every panel
+                // cycles through updates evenly across frames.
+                shouldCapture = (continuousRedrawOrdinal % spreadFactor) == frameSlot;
+                continuousRedrawOrdinal++;
+            }
+            else
+            {
+                // Normal dirty panel: flat per-frame budget cap.
+                shouldCapture = dirtyUpdatesThisFrame < dirtyLimit;
+            }
 
             if (comp.IsFullScreen)
             {
@@ -348,6 +392,9 @@ public class AvaloniaSceneRenderer : SceneRendererBase
             drawAccum += AvaloniaRenderMetrics.ElapsedMs(tDrawFs);
             panelsDrawn += _fullscreenQueue.Count;
         }
+
+        // Update round-robin state for next frame.
+        _lastContinuousRedrawCount = continuousRedrawOrdinal;
 
         // ── Store metrics ──
         metrics.FrameCaptureMs = captureAccum;

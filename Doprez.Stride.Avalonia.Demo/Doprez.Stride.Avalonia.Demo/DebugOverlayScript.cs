@@ -1,3 +1,4 @@
+using System.Linq;
 using Stride.Core;
 using Stride.Core.Mathematics;
 using Stride.Engine;
@@ -32,6 +33,15 @@ public class DebugOverlayScript : SyncScript
     [DataMember(20)]
     public bool ShowAvaloniaPerfMetrics { get; set; } = true;
 
+    /// <summary>
+    /// Maximum rate (in Hz) at which the Avalonia UI pipeline is updated.
+    /// <c>0</c> = match game framerate (no throttling, default).
+    /// For example, set to <c>30</c> to run the UI at 30 FPS while the
+    /// game runs at 60+ FPS.
+    /// </summary>
+    [DataMember(30)]
+    public int TargetUiHz { get; set; } = 5;
+
     public override void Start()
     {
         _debugPanel = new DebugPanel
@@ -54,11 +64,17 @@ public class DebugOverlayScript : SyncScript
         };
 
         Entity.Add(avaloniaComponent);
+
+        // Apply initial TargetUiHz to the AvaloniaSystem
+        ApplyTargetUiHz();
     }
 
     public override void Update()
     {
         if (_debugPanel == null) return;
+
+        // Allow TargetUiHz to be changed at runtime (e.g. via GameStudio property editor)
+        ApplyTargetUiHz();
 
         // Feed timing and scene data to the debug panel every frame
         _debugPanel.Update(
@@ -82,6 +98,13 @@ public class DebugOverlayScript : SyncScript
                 AvaloniaRenderMetrics.Instance.DumpBenchmark();
             }
         }
+    }
+
+    private void ApplyTargetUiHz()
+    {
+        var avSystem = Game.GameSystems.OfType<AvaloniaSystem>().FirstOrDefault();
+        if (avSystem != null)
+            avSystem.TargetUiHz = TargetUiHz;
     }
 
     public override void Cancel()

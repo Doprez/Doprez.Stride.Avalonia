@@ -40,6 +40,7 @@ public class DebugPanel : UserControl
     private readonly TextBlock _avGcText;
     private readonly TextBlock _avFrameTimeText;
     private readonly TextBlock _avStutterText;
+    private readonly TextBlock _avSkippedTicksText;
 
     private int _frameCount;
     private double _elapsed;
@@ -96,6 +97,7 @@ public class DebugPanel : UserControl
         _avGcText = MakeLabel("GC: --");
         _avFrameTimeText = MakeLabel("Frame: avg -- / peak -- ms");
         _avStutterText = MakeLabel("GC delta: --");
+        _avSkippedTicksText = MakeLabel("Render skips: --");
 
         _avaloniaSection = new StackPanel
         {
@@ -120,6 +122,7 @@ public class DebugPanel : UserControl
                 _avGcText,
                 _avFrameTimeText,
                 _avStutterText,
+                _avSkippedTicksText,
             },
         };
 
@@ -172,6 +175,7 @@ public class DebugPanel : UserControl
     private double _snapshotAvAvgFrame, _snapshotAvPeakFrame;
     private int _snapshotAvGcDelta0, _snapshotAvGcDelta1, _snapshotAvGcDelta2;
     private bool _snapshotShowAvPerf;
+    private int _snapshotAvSkippedTicks;
     private Action? _refreshAction;
 
     /// <summary>
@@ -238,6 +242,7 @@ public class DebugPanel : UserControl
         _snapshotAvGcDelta1 = m.GcDelta1;
         _snapshotAvGcDelta2 = m.GcDelta2;
         _snapshotShowAvPerf = ShowAvaloniaPerfMetrics;
+        _snapshotAvSkippedTicks = m.SkippedRenderTicks;
 
         // Use a cached Action to avoid closure + delegate allocation every tick
         _refreshAction ??= RefreshUI;
@@ -285,6 +290,7 @@ public class DebugPanel : UserControl
             _avGcText.Text = $"GC: {_snapshotAvGc0}/{_snapshotAvGc1}/{_snapshotAvGc2} (gen0/1/2)";
             _avFrameTimeText.Text = $"Frame: avg {_snapshotAvAvgFrame:F2} / peak {_snapshotAvPeakFrame:F2} ms";
             _avStutterText.Text = $"GC delta: {_snapshotAvGcDelta0}/{_snapshotAvGcDelta1}/{_snapshotAvGcDelta2} (last {RefreshInterval:F2}s)";
+            _avSkippedTicksText.Text = $"Render skips: {_snapshotAvSkippedTicks}";
         }
     }
 

@@ -34,6 +34,27 @@ public class AvaloniaSystem : GameSystemBase
     private double _lastFsMouseX = double.NaN;
     private double _lastFsMouseY = double.NaN;
 
+    // ── UI Hz throttle ──────────────────────────────────────────────
+    private double _uiAccumulatorMs;
+
+    /// <summary>
+    /// Maximum rate (in Hz) at which the Avalonia UI pipeline is updated.
+    /// <para>
+    /// When set to <c>0</c> (default), the UI runs at the full game
+    /// frame rate — identical to previous behaviour.
+    /// </para>
+    /// <para>
+    /// When set to a positive value (e.g. 30), the system accumulates
+    /// elapsed time each frame and only runs input processing,
+    /// <c>Dispatcher.RunJobs()</c>, and <c>ForceRenderTimerTick()</c>
+    /// once the budget (<c>1000 / TargetUiHz</c> ms) has elapsed.
+    /// Discrete input events (button press/release, key press/release,
+    /// mouse wheel) are always forwarded immediately so that clicks are
+    /// never lost; only continuous mouse-move events are deferred.
+    /// </para>
+    /// </summary>
+    public int TargetUiHz { get; set; } = 0;
+
     internal Matrix CameraView { get; set; }
     internal Matrix CameraViewProjection { get; set; }
     internal bool HasCameraMatrices { get; set; }
@@ -59,6 +80,27 @@ public class AvaloniaSystem : GameSystemBase
         var updateStart = Stopwatch.GetTimestamp();
         using var _profileUpdate = Profiler.Begin(AvaloniaProfilingKeys.Update);
 
+        // ── Hz throttle ──
+        // When TargetUiHz > 0, accumulate elapsed time and skip the
+        // full Avalonia pipeline until the budget has elapsed.
+        // Discrete input (buttons, keys, wheel) is forwarded
+        // immediately so clicks are never lost — only continuous
+        // mouse-move events and the compositor tick are deferred.
+        _uiAccumulatorMs += gameTime.Elapsed.TotalMilliseconds;
+        bool hzThrottled = false;
+        if (TargetUiHz > 0)
+        {
+            double budgetMs = 1000.0 / TargetUiHz;
+            if (_uiAccumulatorMs < budgetMs)
+                hzThrottled = true;
+            else
+                _uiAccumulatorMs -= budgetMs; // consume one tick's worth
+        }
+        else
+        {
+            _uiAccumulatorMs = 0; // no throttle — keep accumulator at zero
+        }
+
         // ── Collect components ──
         long t0 = Stopwatch.GetTimestamp();
         using (Profiler.Begin(AvaloniaProfilingKeys.CollectComponentsUpdate))
@@ -79,6 +121,17 @@ public class AvaloniaSystem : GameSystemBase
             (_input.Mouse.PressedButtons.Count > 0 ||
              _input.Mouse.ReleasedButtons.Count > 0 ||
              _input.MouseWheelDelta != 0);
+
+        // When Hz-throttled, still forward discrete input (buttons,
+        // keys, wheel) so clicks are never lost.  Skip continuous
+        // mouse-move events and the compositor tick.
+        if (hzThrottled && !hasInput && !hasMouseActivity)
+        {
+            // Nothing interesting happened and we're under budget — skip.
+            metrics.SkippedRenderTicks++;
+            metrics.UpdateTotalMs = AvaloniaRenderMetrics.ElapsedMs(updateStart);
+            return;
+        }
         // When a mouse button is held (e.g. right-click camera rotation)
         // the cursor movement is owned by the camera controller, not by
         // the UI.  Skip forwarding mouse events entirely in that case to
@@ -153,15 +206,34 @@ public class AvaloniaSystem : GameSystemBase
 
         // ── Dispatcher jobs + headless render ──
         // RunJobs() processes queued UI updates (e.g. DebugPanel text changes).
-        // ForceRenderTimerTick() tells the headless compositor to render all
-        // dirty windows NOW, so that DrawCore can read their framebuffers
-        // directly without calling CaptureRenderedFrame() (which allocates a
-        // LOH-sized WriteableBitmap copy on every call).
+        // Always called so bindings, timers, and animation scheduling work.
+        // ForceRenderTimerTick() is only called when at least one panel is
+        // dirty — skipping it avoids the full Skia compositor render pass
+        // (layout, measure, visual tree walk) on frames where nothing changed.
         long t2 = Stopwatch.GetTimestamp();
         using (Profiler.Begin(AvaloniaProfilingKeys.DispatcherJobs))
         {
             Dispatcher.UIThread.RunJobs();
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+
+            // Check whether any panel actually needs re-rendering.
+            bool anyDirty = false;
+            foreach (var comp in components)
+            {
+                if (comp.Enabled && comp.Page != null && comp.Page.IsDirty)
+                {
+                    anyDirty = true;
+                    break;
+                }
+            }
+
+            if (anyDirty)
+            {
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            }
+            else
+            {
+                metrics.SkippedRenderTicks++;
+            }
         }
         metrics.DispatcherJobsMs = AvaloniaRenderMetrics.ElapsedMs(t2);
 
