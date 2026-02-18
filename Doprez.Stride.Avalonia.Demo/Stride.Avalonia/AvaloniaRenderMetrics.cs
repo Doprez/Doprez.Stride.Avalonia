@@ -64,6 +64,13 @@ public sealed class AvaloniaRenderMetrics
     /// <summary>Number of atlas textures currently allocated.</summary>
     public int AtlasCount { get; internal set; }
 
+    /// <summary>
+    /// Number of frames where <c>ForceRenderTimerTick()</c> was skipped
+    /// because no panels were dirty (dirty-gate) or because the UI Hz
+    /// budget had not elapsed (Hz throttle).  Reset each frame.
+    /// </summary>
+    public int SkippedRenderTicks { get; internal set; }
+
     // ── GC pressure ──
 
     /// <summary>Gen-0 GC count at last snapshot.</summary>
@@ -185,6 +192,7 @@ public sealed class AvaloniaRenderMetrics
         PanelsDirtyUpdated = 0;
         PanelsDirtySkipped = 0;
         BytesUploaded = 0;
+        SkippedRenderTicks = 0;
     }
 
     /// <summary>
