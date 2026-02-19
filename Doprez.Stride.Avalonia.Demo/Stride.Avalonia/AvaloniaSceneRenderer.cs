@@ -8,6 +8,7 @@ using Stride.Engine;
 using Stride.Graphics;
 using Stride.Rendering;
 using Stride.Rendering.Compositing;
+using Stride.Shaders;
 
 using Matrix = Stride.Core.Mathematics.Matrix;
 using Vector3 = Stride.Core.Mathematics.Vector3;
@@ -31,11 +32,17 @@ public class AvaloniaSceneRenderer : SceneRendererBase
     private Sprite3DBatch? _sprite3DBatch;       // batched world-space panels
     private AvaloniaTextureAtlasManager? _atlasManager;
 
-    private readonly Dictionary<AvaloniaComponent, Texture> _textures = new(); // fullscreen + non-atlas world-space
+    private readonly Dictionary<AvaloniaComponent, Texture> _textures = new(); // fullscreen + non-atlas world-space + custom-effect
     private readonly List<AvaloniaComponent> _componentCache = new();
     private readonly List<(AvaloniaComponent comp, int atlasIndex)> _worldSpaceQueue = new(); // atlas world-space deferred draw list (with atlas index)
     private readonly List<AvaloniaComponent> _worldSpaceNonAtlas = new();      // non-atlas world-space (drawn individually)
+    private readonly List<AvaloniaComponent> _customEffectQueue = new();       // world-space panels with custom SDSL effect
     private readonly List<AvaloniaComponent> _fullscreenQueue = new();         // fullscreen panels (drawn last, on top)
+
+    // Custom-effect rendering state
+    private readonly Dictionary<string, EffectInstance> _effectCache = new();
+    private readonly Dictionary<string, CustomEffectParameterKeys> _effectKeysCache = new();
+    private MutablePipelineState? _customPipelineState;
     private readonly Dictionary<AvaloniaComponent, float> _distanceCache = new();
     private Matrix _cameraView;
     private Matrix _cameraViewProjection;
@@ -67,6 +74,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
         _spriteBatch = new SpriteBatch(GraphicsDevice);
         _sprite3DBatch = new Sprite3DBatch(GraphicsDevice, bufferElementCount: 2048);
         _atlasManager = new AvaloniaTextureAtlasManager(GraphicsDevice);
+        _customPipelineState = new MutablePipelineState(GraphicsDevice);
     }
 
     protected override void DrawCore(RenderContext context, RenderDrawContext drawContext)
@@ -132,6 +140,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
         _worldSpaceQueue.Clear();
         _worldSpaceNonAtlas.Clear();
+        _customEffectQueue.Clear();
         _fullscreenQueue.Clear();
 
         // ──────────────────────────────────────────────
@@ -178,6 +187,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
             // ContinuousRedraw panels can monopolise the budget and
             // prevent other panels from ever getting their first capture.
             bool hasExistingTexture = comp.IsFullScreen || !comp.UseAtlas
+                || !string.IsNullOrEmpty(comp.CustomEffectName)
                 ? _textures.ContainsKey(comp)
                 : _atlasManager!.TryGetSourceRect(comp, out _, out _);
 
@@ -245,6 +255,51 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
                 // Queue fullscreen panel for drawing after world-space panels
                 _fullscreenQueue.Add(comp);
+            }
+            else if (!string.IsNullOrEmpty(comp.CustomEffectName))
+            {
+                // ── World-space panel with custom SDSL effect ──
+                // Always uses per-component textures (never atlas).
+                Texture? texture;
+                if (shouldCapture)
+                {
+                    long tCapture = Stopwatch.GetTimestamp();
+                    WriteableBitmap? bitmap;
+                    using (Profiler.Begin(AvaloniaProfilingKeys.FrameCapture))
+                    {
+                        bitmap = comp.Page.CaptureFrame();
+                    }
+                    captureAccum += AvaloniaRenderMetrics.ElapsedMs(tCapture);
+                    if (bitmap == null) continue;
+
+                    if (wasDirty || !_textures.TryGetValue(comp, out texture))
+                    {
+                        long tUpload = Stopwatch.GetTimestamp();
+                        using (Profiler.Begin(AvaloniaProfilingKeys.TextureUpload))
+                        {
+                            texture = UpdateTexture(comp, bitmap, commandList, resW, resH);
+                        }
+                        uploadAccum += AvaloniaRenderMetrics.ElapsedMs(tUpload);
+                        if (texture == null) continue;
+                        if (wasDirty)
+                        {
+                            dirtyUpdatesThisFrame++;
+                            panelsDirtyUpdated++;
+                            bytesUploaded += (long)resW * resH * 4;
+                        }
+                    }
+                }
+                else
+                {
+                    if (!_textures.TryGetValue(comp, out texture) || texture == null)
+                    {
+                        panelsDirtySkipped++;
+                        continue;
+                    }
+                    panelsDirtySkipped++;
+                }
+
+                _customEffectQueue.Add(comp);
             }
             else
             {
@@ -361,6 +416,18 @@ public class AvaloniaSceneRenderer : SceneRendererBase
             }
             drawAccum += AvaloniaRenderMetrics.ElapsedMs(tDraw);
             panelsDrawn += _worldSpaceQueue.Count;
+        }
+
+        // Custom-effect world-space panels (custom SDSL shader per panel)
+        if (_customEffectQueue.Count > 0 && _hasCameraMatrices)
+        {
+            long tDrawCustom = Stopwatch.GetTimestamp();
+            using (Profiler.Begin(AvaloniaProfilingKeys.SpriteBatchDraw))
+            {
+                DrawWorldSpaceCustomEffect(drawContext, backBuffer);
+            }
+            drawAccum += AvaloniaRenderMetrics.ElapsedMs(tDrawCustom);
+            panelsDrawn += _customEffectQueue.Count;
         }
 
         // Non-atlas world-space panels (individual draw call per panel)
@@ -566,6 +633,111 @@ public class AvaloniaSceneRenderer : SceneRendererBase
     }
 
     // ──────────────────────────────────────────────
+    //  Custom-Effect Drawing
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Draws world-space panels that have a <see cref="AvaloniaComponent.CustomEffectName"/>
+    /// using a custom SDSL effect on a subdivided quad mesh.
+    /// </summary>
+    private void DrawWorldSpaceCustomEffect(RenderDrawContext drawContext, Texture backBuffer)
+    {
+        var commandList = drawContext.CommandList;
+        var depthStencil = GraphicsDevice.Presenter.DepthStencilBuffer;
+        commandList.SetRenderTargetAndViewport(depthStencil, backBuffer);
+
+        foreach (var comp in _customEffectQueue)
+        {
+            if (!_textures.TryGetValue(comp, out var texture) || texture == null)
+                continue;
+
+            var effectName = comp.CustomEffectName!;
+
+            // Get or compile the effect
+            if (!_effectCache.TryGetValue(effectName, out var effectInstance))
+            {
+                try
+                {
+                    var effectSystem = Services.GetService<EffectSystem>();
+                    if (effectSystem == null)
+                    {
+                        _log.Warning($"EffectSystem not available — cannot compile custom effect '{effectName}'.");
+                        continue;
+                    }
+                    var effect = effectSystem.LoadEffect(effectName).WaitForResult();
+                    effectInstance = new EffectInstance(effect);
+                    effectInstance.UpdateEffect(GraphicsDevice);
+                    _effectCache[effectName] = effectInstance;
+
+                    // Resolve parameter keys from the compiled effect's reflection
+                    var keys = new CustomEffectParameterKeys();
+                    keys.Resolve(effectInstance, effectName);
+                    _effectKeysCache[effectName] = keys;
+                }
+                catch (Exception ex)
+                {
+                    _log.Error($"Failed to load custom effect '{effectName}': {ex.Message}");
+                    continue;
+                }
+            }
+
+            // Build world-view-projection
+            var worldMatrix = comp.GetEffectiveWorldMatrix(_sortCameraPos);
+            var sizeScale = Matrix.Scaling(comp.Size.X, comp.Size.Y, 1f);
+            var worldSized = sizeScale * worldMatrix;
+            Matrix.Multiply(ref worldSized, ref _cameraViewProjection, out var wvp);
+
+            // Set shader parameters
+            try
+            {
+                if (!_effectKeysCache.TryGetValue(effectName, out var keys) || !keys.IsResolved)
+                {
+                    _log.Warning($"Parameter keys not resolved for effect '{effectName}'.");
+                    continue;
+                }
+
+                if (keys.WorldViewProjection != null)
+                    effectInstance.Parameters.Set(keys.WorldViewProjection, ref wvp);
+                if (keys.World != null)
+                    effectInstance.Parameters.Set(keys.World, ref worldSized);
+                if (keys.UITexture != null)
+                    effectInstance.Parameters.Set(keys.UITexture, texture);
+                if (keys.Time != null)
+                    effectInstance.Parameters.Set(keys.Time, comp.EffectTime);
+            }
+            catch (Exception ex)
+            {
+                _log.Warning($"Failed to set parameters on effect '{effectName}': {ex.Message}");
+                continue;
+            }
+
+            // Get subdivided quad mesh
+            var mesh = AvaloniaQuadMeshBuilder.GetOrCreate(GraphicsDevice, comp.MeshSubdivisions);
+
+            // Configure pipeline state
+            _customPipelineState!.State.RootSignature = effectInstance.RootSignature;
+            _customPipelineState.State.EffectBytecode = effectInstance.Effect.Bytecode;
+            _customPipelineState.State.InputElements = mesh.VertexBufferBinding.Declaration.CreateInputElements();
+            _customPipelineState.State.PrimitiveType = PrimitiveType.TriangleList;
+
+            _customPipelineState.State.BlendState = BlendStates.AlphaBlend;
+            _customPipelineState.State.DepthStencilState = DepthStencilStates.DepthRead;
+            _customPipelineState.State.RasterizerState.CullMode = CullMode.None;
+
+            _customPipelineState.State.Output.CaptureState(commandList);
+            _customPipelineState.Update();
+            commandList.SetPipelineState(_customPipelineState.CurrentState);
+
+            // Apply effect parameters and draw
+            effectInstance.Apply(drawContext.GraphicsContext);
+
+            commandList.SetVertexBuffer(0, mesh.VertexBufferBinding.Buffer, mesh.VertexBufferBinding.Offset, mesh.VertexBufferBinding.Stride);
+            commandList.SetIndexBuffer(mesh.IndexBufferBinding.Buffer, 0, mesh.IndexBufferBinding.Is32Bit);
+            commandList.DrawIndexed(mesh.IndexCount);
+        }
+    }
+
+    // ──────────────────────────────────────────────
     //  Component Collection & Sorting
     // ──────────────────────────────────────────────
 
@@ -642,6 +814,10 @@ public class AvaloniaSceneRenderer : SceneRendererBase
         foreach (var tex in _textures.Values)
             tex?.Dispose();
         _textures.Clear();
+        foreach (var effect in _effectCache.Values)
+            effect?.Dispose();
+        _effectCache.Clear();
+        _effectKeysCache.Clear();
         _atlasManager?.Dispose();
         _sprite3DBatch?.Dispose();
         _spriteBatch?.Dispose();

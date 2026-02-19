@@ -1,0 +1,73 @@
+// WavyUIEffect.sdsl
+// 
+// A custom SDSL effect that renders an Avalonia UI texture onto a subdivided
+// quad mesh with sinusoidal vertex displacement, creating a "wavy" 3D panel.
+//
+// Required parameters (set by AvaloniaSceneRenderer):
+//   - WorldViewProjection : float4x4
+//   - UITexture           : Texture2D
+//   - Time                : float
+//
+// Optional tuning parameters:
+//   - Amplitude  : wave height in local units (default 0.05)
+//   - Frequency  : spatial frequency of the wave (default 10.0)
+//   - Speed      : temporal speed multiplier (default 3.0)
+
+shader WavyUIEffect : ShaderBase, Texturing
+{
+    // ── Vertex input streams ──
+    // These must be declared so SDSL generates the proper HLSL input struct.
+    stream float4 Position : POSITION;
+
+    // ── Parameters ──
+    cbuffer PerDraw
+    {
+        stage float4x4 WorldViewProjection;
+        stage float4x4 World;
+        stage float Time;
+        stage float Amplitude  = 0.09;
+        stage float Frequency  = 10.0;
+        stage float Speed      = 30.0;
+    };
+
+    // UI texture from Avalonia
+    Texture2D UITexture;
+
+    // Sampler for the UI texture — linear filtering for smooth scaling
+    SamplerState UISampler
+    {
+        Filter = MIN_MAG_MIP_LINEAR;
+        AddressU = Clamp;
+        AddressV = Clamp;
+    };
+
+    // ── Vertex shader ──
+    stage override void VSMain()
+    {
+        // streams.Position is the mesh vertex position (local space, ±0.5)
+        float4 pos = streams.Position;
+
+        // Sinusoidal displacement along Z based on X position and time
+        float wave = sin(pos.x * Frequency + Time * Speed) * Amplitude;
+        // Add a secondary wave based on Y for more organic motion
+        wave += sin(pos.y * Frequency * 0.7 + Time * Speed * 1.3) * Amplitude * 0.5;
+
+        pos.z += wave;
+
+        // Transform to clip space
+        streams.ShadingPosition = mul(pos, WorldViewProjection);
+
+        // Pass through texture coordinates
+        // streams.TexCoord is set from the vertex input
+    }
+
+    // ── Pixel shader ──
+    stage override void PSMain()
+    {
+        // Sample the Avalonia UI texture
+        float4 color = UITexture.Sample(UISampler, streams.TexCoord);
+
+        // Output with premultiplied alpha (Avalonia renders premultiplied)
+        streams.ColorTarget = color;
+    }
+};

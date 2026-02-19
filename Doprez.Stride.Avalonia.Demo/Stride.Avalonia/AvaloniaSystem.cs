@@ -148,6 +148,10 @@ public class AvaloniaSystem : GameSystemBase
             {
                 if (!comp.Enabled || comp.Page == null || !comp.Page.IsReady) continue;
 
+                // Increment EffectTime for custom-effect panels
+                if (!string.IsNullOrEmpty(comp.CustomEffectName))
+                    comp.EffectTime += (float)gameTime.Elapsed.TotalSeconds;
+
                 // ContinuousRedraw: mark dirty every frame for animated content
                 if (comp.ContinuousRedraw)
                     comp.Page.MarkDirty();

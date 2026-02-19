@@ -89,7 +89,50 @@ public class AvaloniaComponent : ActivableEntityComponent
     [DefaultValue(false)]
     public bool ContinuousRedraw { get; set; } = false;
 
+    /// <summary>
+    /// Name of a custom SDSL effect to use for rendering this panel instead
+    /// of the built-in <see cref="SpriteBatch"/>/<see cref="Sprite3DBatch"/>
+    /// pipeline.  When non-null, the panel is drawn as a subdivided quad mesh
+    /// with the specified shader, enabling vertex displacement, pixel
+    /// post-processing, and other GPU effects.
+    /// <para>
+    /// The effect must define at least:
+    /// <list type="bullet">
+    ///   <item><c>Texture2D UITexture</c> — the Avalonia-rendered UI texture.</item>
+    ///   <item><c>float4x4 WorldViewProjection</c> — combined transform.</item>
+    ///   <item><c>float Time</c> — elapsed time in seconds (auto-incremented).</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// Only supported for world-space panels (<see cref="IsFullScreen"/> = false).
+    /// Panels with a custom effect always bypass the texture atlas
+    /// (<see cref="UseAtlas"/> is ignored).
+    /// Input raycasting still uses the flat panel plane, so mouse hit-testing
+    /// may be slightly inaccurate on heavily displaced surfaces.
+    /// </para>
+    /// </summary>
+    [DataMember(60)]
+    [DefaultValue(null)]
+    public string? CustomEffectName { get; set; }
 
+    /// <summary>
+    /// Number of subdivisions per axis for the quad mesh used when
+    /// <see cref="CustomEffectName"/> is set.  Higher values allow smoother
+    /// vertex displacement at the cost of more vertices/triangles.
+    /// Ignored when <see cref="CustomEffectName"/> is <c>null</c>.
+    /// Default is 32 (= 33×33 = 1,089 vertices, 32×32×2 = 2,048 triangles).
+    /// </summary>
+    [DataMember(62)]
+    [DefaultValue(32)]
+    public int MeshSubdivisions { get; set; } = 32;
+
+    /// <summary>
+    /// Elapsed time in seconds, auto-incremented each frame by
+    /// <see cref="AvaloniaSystem"/> when <see cref="CustomEffectName"/> is set.
+    /// Passed to the shader as a <c>Time</c> parameter for animations.
+    /// </summary>
+    [DataMemberIgnore]
+    public float EffectTime { get; set; }
 
     /// <summary>
     /// Returns the world matrix for rendering. For billboards the rotation
