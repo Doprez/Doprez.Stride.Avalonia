@@ -413,7 +413,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
     //  Texture Management
     // ──────────────────────────────────────────────
 
-    private Texture? UpdateTexture(
+    private unsafe Texture? UpdateTexture(
         AvaloniaComponent comp, WriteableBitmap bitmap,
         CommandList commandList, int width, int height)
     {
@@ -445,7 +445,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
         if (dataSize < expectedBytes) return texture;
 
         texture.SetData(commandList,
-            new DataPointer(fb.Address, dataSize));
+            new Span<byte>(fb.Address.ToPointer(), dataSize));
 
         return texture;
     }

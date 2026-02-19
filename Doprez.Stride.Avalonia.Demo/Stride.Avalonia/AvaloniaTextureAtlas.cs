@@ -135,7 +135,7 @@ internal sealed class AvaloniaTextureAtlas : IDisposable
         int dataSize = fb.RowBytes * fb.Size.Height;
 
         _texture.SetData(commandList,
-            new DataPointer(fb.Address, dataSize),
+            new Span<byte>(fb.Address.ToPointer(), dataSize),
             region: region);
     }
 
