@@ -12,3 +12,5 @@ _ReSharper*
 [Bb]in/
 obj/
 Cache/
+
+.vscode/
