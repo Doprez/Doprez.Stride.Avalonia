@@ -14,4 +14,5 @@ OutputGroupDirectories: {}
 ExplicitFolders: []
 Bundles: []
 TemplateFolders: []
-RootAssets: []
+RootAssets:
+    - 6ccf40b5-2700-44c7-9b16-2d50e500392c:StrideLogo
