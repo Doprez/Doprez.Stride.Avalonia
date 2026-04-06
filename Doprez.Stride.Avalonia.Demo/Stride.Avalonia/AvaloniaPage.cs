@@ -27,6 +27,7 @@ public abstract class AvaloniaPage : IDisposable
 {
     private Window? _window;
     private WriteableBitmap? _lastFrame;
+    private StrideRenderSurface? _renderSurface;
     private bool _isDirty = true;
     private Control? _content;
 
@@ -55,10 +56,25 @@ public abstract class AvaloniaPage : IDisposable
     public bool IsReady => _window != null;
 
     /// <summary>
+    /// The <see cref="StrideRenderSurface"/> for this page, or <c>null</c>
+    /// if the legacy headless framebuffer path is active.
+    /// </summary>
+    [DataMemberIgnore]
+    internal StrideRenderSurface? RenderSurface => _renderSurface;
+
+    /// <summary>
     /// Indicates whether the visual tree has changed since the last capture.
     /// </summary>
     [DataMemberIgnore]
     public bool IsDirty => _isDirty;
+
+    /// <summary>
+    /// Indicates whether the last call to <see cref="CaptureFrame"/> produced
+    /// pixel data that differs from the previous capture.  When <c>false</c>,
+    /// the GPU texture is already up-to-date and the upload can be skipped.
+    /// </summary>
+    [DataMemberIgnore]
+    public bool HasNewContent { get; private set; } = true;
 
     /// <summary>
     /// Creates the root Avalonia <see cref="Control"/> for this page.
@@ -99,6 +115,16 @@ public abstract class AvaloniaPage : IDisposable
         RenderOptions.SetTextRenderingMode(_window, TextRenderingMode.Antialias);
 
         _window.Show();
+
+        // When the custom Stride platform graphics is active, locate the
+        // StrideRenderSurface that was created for this window's render
+        // target and pre-size it before the first layout pass.
+        if (AvaloniaApp.UseStridePlatformGraphics)
+        {
+            _renderSurface = StridePlatformGraphics.FindSurface(_window.PlatformImpl);
+            _renderSurface?.EnsureSize(width, height);
+        }
+
         Dispatcher.UIThread.RunJobs();
     }
 
@@ -114,78 +140,126 @@ public abstract class AvaloniaPage : IDisposable
         _window.Width = width;
         _window.Height = height;
         _isDirty = true;
+        _renderSurface?.EnsureSize(width, height);
         Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>
-    /// Captures the last rendered Avalonia frame as a <see cref="WriteableBitmap"/>.
-    /// Returns cached bitmap if the page is not dirty.
+    /// Captures the last rendered Avalonia frame.
+    /// Returns <c>true</c> if frame data is available.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <c>CaptureRenderedFrame()</c> internally calls
-    /// <c>HeadlessWindowImpl.GetLastRenderedFrame()</c> which creates a
-    /// <b>brand-new</b> <see cref="WriteableBitmap"/> copy of the internal
-    /// framebuffer on every call.  For a 1280x720 panel that is ~3.5 MB —
-    /// large enough to land on the Large-Object Heap and trigger gen-2 GC
-    /// pauses (visible as frame stutters).
+    /// <b>Stride platform path</b> (preferred):
+    /// The compositor has already rendered to the
+    /// <see cref="StrideRenderSurface"/>'s <see cref="SkiaSharp.SKSurface"/>.
+    /// This method compares pixels with the previous frame and sets
+    /// <see cref="HasNewContent"/> accordingly.  No <c>WriteableBitmap</c> is
+    /// involved — pixels are accessed via direct pointer.
     /// </para>
     /// <para>
-    /// To avoid this, we access the <c>HeadlessWindowImpl._lastRenderedFrame</c>
-    /// field directly via reflection (the same pattern
-    /// <see cref="AvaloniaInputBridge"/> uses for internal input APIs).
-    /// This gives us a read-only reference to the already-rendered bitmap
-    /// without allocating a copy.  We then memcpy the pixels into our
-    /// reusable <c>_lastFrame</c> bitmap.
-    /// </para>
-    /// <para>
-    /// <c>AvaloniaSystem.Update()</c> calls <c>ForceRenderTimerTick()</c>
-    /// before <c>DrawCore</c> runs, so the internal framebuffer is guaranteed
-    /// to contain the latest content when this method is called.
-    /// </para>
-    /// <para>
-    /// If reflection fails (Avalonia internals changed), we fall back to
-    /// <c>CaptureRenderedFrame()</c> transparently.
+    /// <b>Legacy headless path</b> (fallback):
+    /// Accesses <c>HeadlessWindowImpl._lastRenderedFrame</c> via reflection,
+    /// copies pixels to a reusable <c>WriteableBitmap</c>, and compares to
+    /// detect changes.
     /// </para>
     /// </remarks>
-    public WriteableBitmap? CaptureFrame()
+    public bool CaptureFrame()
     {
-        if (_window == null) return null;
-        if (!_isDirty && _lastFrame != null)
-            return _lastFrame;
+        if (_window == null) return false;
 
-        // Fast path: read the internal framebuffer directly (zero LOH allocation).
-        // Requires _lastFrame to exist (first call falls through to slow path).
+        // ── Stride platform path: pixels are in the StrideRenderSurface ──
+        if (_renderSurface != null)
+        {
+            if (!_isDirty)
+            {
+                HasNewContent = false;
+                return _renderSurface.Surface != null;
+            }
+
+            _renderSurface.CompareAndUpdate();
+            HasNewContent = _renderSurface.HasNewContent;
+            _isDirty = false;
+            return _renderSurface.Surface != null;
+        }
+
+        // ── Legacy headless path: WriteableBitmap capture ──
+        return CaptureFrameLegacy();
+    }
+
+    /// <summary>
+    /// Returns a <see cref="PixelAccess"/> for the current frame data.
+    /// The caller must dispose it to release any underlying lock.
+    /// </summary>
+    public PixelAccess LockPixels()
+    {
+        if (_renderSurface != null)
+        {
+            return new PixelAccess(
+                _renderSurface.GetPixelPointer(),
+                _renderSurface.GetPixelDataSize(),
+                _renderSurface.Width * 4,
+                _renderSurface.Width,
+                _renderSurface.Height);
+        }
+
+        // Legacy: lock the WriteableBitmap.
+        if (_lastFrame == null)
+            return default;
+
+        var fb = _lastFrame.Lock();
+        return new PixelAccess(
+            fb.Address,
+            fb.RowBytes * fb.Size.Height,
+            fb.RowBytes,
+            fb.Size.Width,
+            fb.Size.Height,
+            fb);
+    }
+
+    /// <summary>Legacy headless capture path using WriteableBitmap.</summary>
+    private bool CaptureFrameLegacy()
+    {
+        if (_window == null) return false;
+
+        if (!_isDirty && _lastFrame != null)
+        {
+            HasNewContent = false;
+            return true;
+        }
+
+        HasNewContent = true;
+
         if (_lastFrame != null && TryCaptureDirectly())
         {
             _isDirty = false;
-            return _lastFrame;
+            return true;
         }
 
-        // Slow path: CaptureRenderedFrame (allocates a temp WriteableBitmap on LOH).
-        // Used only on the very first capture or if reflection fails.
         var captured = _window.CaptureRenderedFrame();
         if (captured == null)
         {
+            HasNewContent = false;
             _isDirty = false;
-            return _lastFrame;
+            return _lastFrame != null;
         }
 
         if (_lastFrame != null
             && _lastFrame.PixelSize == captured.PixelSize
             && !ReferenceEquals(_lastFrame, captured))
         {
-            CopyBitmapPixels(captured, _lastFrame);
+            HasNewContent = CopyBitmapIfChanged(captured, _lastFrame);
             captured.Dispose();
         }
         else if (!ReferenceEquals(_lastFrame, captured))
         {
             _lastFrame?.Dispose();
             _lastFrame = captured;
+            HasNewContent = true;
         }
 
         _isDirty = false;
-        return _lastFrame;
+        return true;
     }
 
     /// <summary>
@@ -218,9 +292,16 @@ public abstract class AvaloniaPage : IDisposable
                 _lastFrame = new WriteableBitmap(
                     size, internalBitmap.Dpi,
                     PixelFormat.Bgra8888, AlphaFormat.Premul);
+                // Resolution changed — must copy all pixels.
+                CopyBitmapPixels(internalBitmap, _lastFrame);
+                HasNewContent = true;
+                return true;
             }
 
-            CopyBitmapPixels(internalBitmap, _lastFrame);
+            // Compare pixels before copying: if the rendered content is
+            // identical to what we already have, skip the memcpy and signal
+            // the renderer to skip the GPU upload as well.
+            HasNewContent = CopyBitmapIfChanged(internalBitmap, _lastFrame);
             return true;
         }
     }
@@ -273,8 +354,44 @@ public abstract class AvaloniaPage : IDisposable
         }
     }
 
+    /// <summary>
+    /// Compares <paramref name="source"/> and <paramref name="dest"/> pixel data.
+    /// If different, copies source → dest and returns <c>true</c>.
+    /// If identical, returns <c>false</c> without copying — the GPU texture
+    /// upload can be skipped entirely.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ReadOnlySpan{T}.SequenceEqual"/> is SIMD-optimized on modern
+    /// .NET and completes a 1280×720×4 (≈3.5 MB) comparison in ≈50–100 µs,
+    /// which is an order of magnitude cheaper than the corresponding GPU
+    /// texture upload via PCIe.
+    /// </remarks>
+    private static unsafe bool CopyBitmapIfChanged(WriteableBitmap source, WriteableBitmap dest)
+    {
+        using var src = source.Lock();
+        using var dst = dest.Lock();
+        int bytes = Math.Min(
+            src.RowBytes * src.Size.Height,
+            dst.RowBytes * dst.Size.Height);
+
+        var srcSpan = new ReadOnlySpan<byte>((void*)src.Address, bytes);
+        var dstSpan = new ReadOnlySpan<byte>((void*)dst.Address, bytes);
+
+        if (srcSpan.SequenceEqual(dstSpan))
+            return false; // Content identical — no copy, no upload needed.
+
+        Buffer.MemoryCopy(
+            (void*)src.Address,
+            (void*)dst.Address,
+            dst.RowBytes * dst.Size.Height,
+            bytes);
+        return true;
+    }
+
     public void Dispose()
     {
+        _renderSurface?.Dispose();
+        _renderSurface = null;
         _lastFrame?.Dispose();
         _lastFrame = null;
         _window?.Close();

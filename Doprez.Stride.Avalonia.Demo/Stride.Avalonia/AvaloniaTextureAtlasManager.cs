@@ -1,4 +1,3 @@
-using global::Avalonia.Media.Imaging;
 using Stride.Core.Diagnostics;
 using Stride.Core.Mathematics;
 using Stride.Graphics;
@@ -113,13 +112,13 @@ internal sealed class AvaloniaTextureAtlasManager : IDisposable
     }
 
     /// <summary>
-    /// Copies pixel data from a captured <see cref="WriteableBitmap"/> into
+    /// Copies pixel data from a <see cref="PixelAccess"/> into
     /// the component's allocated region in the correct atlas texture.
     /// </summary>
-    public void UpdateSlot(AvaloniaComponent comp, WriteableBitmap bitmap, CommandList commandList)
+    public void UpdateSlot(AvaloniaComponent comp, PixelAccess pixels, CommandList commandList)
     {
         if (!_componentAtlas.TryGetValue(comp, out var idx)) return;
-        _atlases[idx].UpdateSlot(comp, bitmap, commandList);
+        _atlases[idx].UpdateSlot(comp, pixels, commandList);
     }
 
     /// <summary>

@@ -56,9 +56,9 @@ public class CounterLabel : UserControl
         };
 
         #warning should make a better update example. This causes REAL bad stutter when you have many instances due to all updating in the same frame.
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _timer.Tick += OnTimerTick;
-        _timer.Start();
+        //_timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        //_timer.Tick += OnTimerTick;
+        //_timer.Start();
     }
 
     private void OnTimerTick(object? sender, EventArgs e)

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using global::Avalonia.Media.Imaging;
 using Stride.Core.Diagnostics;
 using Stride.Core.Mathematics;
 using Stride.Engine;
@@ -208,24 +207,28 @@ public class AvaloniaSceneRenderer : SceneRendererBase
                 if (shouldCapture)
                 {
                     long tCapture = Stopwatch.GetTimestamp();
-                    WriteableBitmap? bitmap;
+                    bool frameAvailable;
                     using (Profiler.Begin(AvaloniaProfilingKeys.FrameCapture))
                     {
-                        bitmap = comp.Page.CaptureFrame();
+                        frameAvailable = comp.Page.CaptureFrame();
                     }
                     captureAccum += AvaloniaRenderMetrics.ElapsedMs(tCapture);
-                    if (bitmap == null) continue;
+                    if (!frameAvailable) continue;
 
-                    if (wasDirty || !_textures.TryGetValue(comp, out texture))
+                    _textures.TryGetValue(comp, out texture);
+                    bool hasNewContent = comp.Page.HasNewContent;
+
+                    if (texture == null || (wasDirty && hasNewContent))
                     {
                         long tUpload = Stopwatch.GetTimestamp();
                         using (Profiler.Begin(AvaloniaProfilingKeys.TextureUpload))
                         {
-                            texture = UpdateTexture(comp, bitmap, commandList, resW, resH);
+                            using var pixels = comp.Page.LockPixels();
+                            texture = UpdateTexture(comp, pixels, commandList);
                         }
                         uploadAccum += AvaloniaRenderMetrics.ElapsedMs(tUpload);
                         if (texture == null) continue;
-                        if (wasDirty)
+                        if (wasDirty && hasNewContent)
                         {
                             dirtyUpdatesThisFrame++;
                             panelsDirtyUpdated++;
@@ -256,15 +259,18 @@ public class AvaloniaSceneRenderer : SceneRendererBase
                     if (shouldCapture)
                     {
                         long tCapture = Stopwatch.GetTimestamp();
-                        WriteableBitmap? bitmap;
+                        bool frameAvailable;
                         using (Profiler.Begin(AvaloniaProfilingKeys.FrameCapture))
                         {
-                            bitmap = comp.Page.CaptureFrame();
+                            frameAvailable = comp.Page.CaptureFrame();
                         }
                         captureAccum += AvaloniaRenderMetrics.ElapsedMs(tCapture);
-                        if (bitmap == null) continue;
+                        if (!frameAvailable) continue;
 
-                        if (wasDirty || !_atlasManager!.TryGetSourceRect(comp, out _, out _))
+                        bool hasAtlasSlot = _atlasManager!.TryGetSourceRect(comp, out _, out _);
+                        bool hasNewContent = comp.Page.HasNewContent;
+
+                        if (!hasAtlasSlot || (wasDirty && hasNewContent))
                         {
                             long tUpload = Stopwatch.GetTimestamp();
                             using (Profiler.Begin(AvaloniaProfilingKeys.TextureUpload))
@@ -273,10 +279,11 @@ public class AvaloniaSceneRenderer : SceneRendererBase
                                 {
                                     continue;
                                 }
-                                _atlasManager.UpdateSlot(comp, bitmap, commandList);
+                                using var pixels = comp.Page.LockPixels();
+                                _atlasManager.UpdateSlot(comp, pixels, commandList);
                             }
                             uploadAccum += AvaloniaRenderMetrics.ElapsedMs(tUpload);
-                            if (wasDirty)
+                            if (wasDirty && hasNewContent)
                             {
                                 dirtyUpdatesThisFrame++;
                                 panelsDirtyUpdated++;
@@ -307,24 +314,28 @@ public class AvaloniaSceneRenderer : SceneRendererBase
                     if (shouldCapture)
                     {
                         long tCapture = Stopwatch.GetTimestamp();
-                        WriteableBitmap? bitmap;
+                        bool frameAvailable;
                         using (Profiler.Begin(AvaloniaProfilingKeys.FrameCapture))
                         {
-                            bitmap = comp.Page.CaptureFrame();
+                            frameAvailable = comp.Page.CaptureFrame();
                         }
                         captureAccum += AvaloniaRenderMetrics.ElapsedMs(tCapture);
-                        if (bitmap == null) continue;
+                        if (!frameAvailable) continue;
 
-                        if (wasDirty || !_textures.TryGetValue(comp, out texture))
+                        _textures.TryGetValue(comp, out texture);
+                        bool hasNewContent = comp.Page.HasNewContent;
+
+                        if (texture == null || (wasDirty && hasNewContent))
                         {
                             long tUpload = Stopwatch.GetTimestamp();
                             using (Profiler.Begin(AvaloniaProfilingKeys.TextureUpload))
                             {
-                                texture = UpdateTexture(comp, bitmap, commandList, resW, resH);
+                                using var pixels = comp.Page.LockPixels();
+                                texture = UpdateTexture(comp, pixels, commandList);
                             }
                             uploadAccum += AvaloniaRenderMetrics.ElapsedMs(tUpload);
                             if (texture == null) continue;
-                            if (wasDirty)
+                            if (wasDirty && hasNewContent)
                             {
                                 dirtyUpdatesThisFrame++;
                                 panelsDirtyUpdated++;
@@ -414,19 +425,14 @@ public class AvaloniaSceneRenderer : SceneRendererBase
     // ──────────────────────────────────────────────
 
     private unsafe Texture? UpdateTexture(
-        AvaloniaComponent comp, WriteableBitmap bitmap,
-        CommandList commandList, int width, int height)
+        AvaloniaComponent comp, PixelAccess pixels,
+        CommandList commandList)
     {
-        using var fb = bitmap.Lock();
+        int bmpW = pixels.Width;
+        int bmpH = pixels.Height;
+        if (bmpW <= 0 || bmpH <= 0 || pixels.Address == IntPtr.Zero) return null;
 
-        // Use the bitmap's actual dimensions to avoid size mismatches
-        // during window resize (the bitmap may still reflect the old size).
-        int bmpW = fb.Size.Width;
-        int bmpH = fb.Size.Height;
-        if (bmpW <= 0 || bmpH <= 0) return null;
-
-        int expectedBytes = bmpW * bmpH * 4; // R8G8B8A8 = 4 bytes/pixel
-        int dataSize = fb.RowBytes * bmpH;
+        int expectedBytes = bmpW * bmpH * 4; // BGRA = 4 bytes/pixel
 
         if (!_textures.TryGetValue(comp, out var texture)
             || texture.Width != bmpW || texture.Height != bmpH)
@@ -440,12 +446,11 @@ public class AvaloniaSceneRenderer : SceneRendererBase
             _textures[comp] = texture;
         }
 
-        // Guard: only upload when the bitmap data size matches the texture.
-        // A stride mismatch (RowBytes != width * 4) would also cause issues.
-        if (dataSize < expectedBytes) return texture;
+        // Guard: only upload when the pixel data size matches the texture.
+        if (pixels.DataSize < expectedBytes) return texture;
 
         texture.SetData(commandList,
-            new Span<byte>(fb.Address.ToPointer(), dataSize));
+            new Span<byte>(pixels.Address.ToPointer(), pixels.DataSize));
 
         return texture;
     }

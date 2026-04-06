@@ -1,4 +1,3 @@
-using global::Avalonia.Media.Imaging;
 using Stride.Core.Mathematics;
 using Stride.Graphics;
 using System;
@@ -114,15 +113,15 @@ internal sealed class AvaloniaTextureAtlas : IDisposable
     }
 
     /// <summary>
-    /// Copies pixel data from a captured <see cref="WriteableBitmap"/> into
+    /// Copies pixel data from a <see cref="PixelAccess"/> into
     /// the panel's allocated region in the atlas texture.
     /// </summary>
-    public unsafe void UpdateSlot(AvaloniaComponent comp, WriteableBitmap bitmap, CommandList commandList)
+    public unsafe void UpdateSlot(AvaloniaComponent comp, PixelAccess pixels, CommandList commandList)
     {
         if (_texture == null || !_slots.TryGetValue(comp, out var slot))
             return;
 
-        using var fb = bitmap.Lock();
+        if (pixels.Address == IntPtr.Zero) return;
 
         var region = new ResourceRegion(
             left: slot.X,
@@ -132,10 +131,8 @@ internal sealed class AvaloniaTextureAtlas : IDisposable
             bottom: slot.Y + slot.Height,
             back: 1);
 
-        int dataSize = fb.RowBytes * fb.Size.Height;
-
         _texture.SetData(commandList,
-            new Span<byte>(fb.Address.ToPointer(), dataSize),
+            new Span<byte>(pixels.Address.ToPointer(), pixels.DataSize),
             region: region);
     }
 
