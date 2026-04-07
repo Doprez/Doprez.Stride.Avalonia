@@ -884,8 +884,14 @@ internal static unsafe class StrideVulkanInterop
         return handle;
     }
 
+    // ── Cached Vulkan resources for GpuCopyImage batching ──
+    private static VkDevice _cachedDevice;
+    private static VkCommandPool _cachedCommandPool;
+    private static VkFence _cachedFence;
+
     /// <summary>
     /// Performs a GPU-to-GPU copy from a Skia-managed VkImage to a Stride-owned VkImage.
+    /// Reuses a cached command pool and fence to avoid per-call allocation overhead.
     /// </summary>
     internal static void GpuCopyImage(GraphicsDevice device, ulong srcImage, ulong dstImage, int width, int height)
     {
@@ -899,14 +905,25 @@ internal static unsafe class StrideVulkanInterop
             var nativeDevice = GetHandleProperty(_nativeDeviceProp!, device, "NativeDevice");
             var nativeQueue = GetHandleField(_nativeCommandQueueField!, device, "NativeCommandQueue");
             var deviceHandle = new VkDevice(nativeDevice);
-            var commandPool = VkCommandPool.Null;
-            var commandBuffer = VkCommandBuffer.Null;
-            var fence = VkFence.Null;
+
+            // Reuse command pool and fence across calls to avoid per-copy allocation overhead.
+            if (_cachedDevice != deviceHandle || _cachedCommandPool == VkCommandPool.Null)
+            {
+                // Device changed or first call — create new resources.
+                if (_cachedCommandPool != VkCommandPool.Null)
+                    vkDestroyCommandPool(_cachedDevice, _cachedCommandPool, null);
+                if (_cachedFence != VkFence.Null)
+                    vkDestroyFence(_cachedDevice, _cachedFence, null);
+
+                _cachedDevice = deviceHandle;
+                _cachedCommandPool = CreateCommandPool(deviceHandle, GraphicsQueueFamilyIndex);
+                _cachedFence = CreateFence(deviceHandle);
+            }
+
+            var commandBuffer = AllocateCommandBuffer(deviceHandle, _cachedCommandPool);
 
             try
             {
-                commandPool = CreateCommandPool(deviceHandle, GraphicsQueueFamilyIndex);
-                commandBuffer = AllocateCommandBuffer(deviceHandle, commandPool);
                 BeginCommandBuffer(commandBuffer);
 
                 var srcImageHandle = new VkImage(srcImage);
@@ -997,17 +1014,14 @@ internal static unsafe class StrideVulkanInterop
 
                 ThrowOnError(vkEndCommandBuffer(commandBuffer), "vkEndCommandBuffer");
 
-                fence = CreateFence(deviceHandle);
+                // Reset and reuse the cached fence.
+                var fence = _cachedFence;
+                vkResetFences(deviceHandle, 1, &fence);
                 SubmitAndWait(deviceHandle, new VkQueue(nativeQueue), commandBuffer, fence);
             }
             finally
             {
-                if (fence != VkFence.Null)
-                    vkDestroyFence(deviceHandle, fence, null);
-                if (commandBuffer != VkCommandBuffer.Null)
-                    vkFreeCommandBuffers(deviceHandle, commandPool, 1, &commandBuffer);
-                if (commandPool != VkCommandPool.Null)
-                    vkDestroyCommandPool(deviceHandle, commandPool, null);
+                vkFreeCommandBuffers(deviceHandle, _cachedCommandPool, 1, &commandBuffer);
             }
         }
         finally

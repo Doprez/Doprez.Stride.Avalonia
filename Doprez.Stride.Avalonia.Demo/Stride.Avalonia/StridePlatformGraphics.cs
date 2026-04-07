@@ -359,24 +359,12 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
 
     private sealed class StrideSkiaGpu : ISkiaGpu
     {
-        private static int _createRenderTargetCount;
-        private static bool _loggedCreateRenderTargetCount;
-
         public bool IsLost => false;
         public void Dispose() { }
         public IDisposable EnsureCurrent() => NoOp.Instance;
 
         public ISkiaGpuRenderTarget? TryCreateRenderTarget(IEnumerable<object> surfaces)
         {
-            _createRenderTargetCount++;
-            if (!_loggedCreateRenderTargetCount && _createRenderTargetCount % 100 == 0)
-            {
-                System.Console.Error.WriteLine(
-                    $"[Stride.Avalonia] TryCreateRenderTarget called {_createRenderTargetCount} times, SurfaceMap has {SurfaceMap.Count} entries");
-                if (_createRenderTargetCount >= 1000)
-                    _loggedCreateRenderTargetCount = true;
-            }
-
             foreach (var s in surfaces)
             {
                 var renderSurface = SurfaceMap.GetOrAdd(s, static _ => new StrideRenderSurface());
@@ -473,10 +461,12 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
         {
             try
             {
-                // Flush the Skia canvas so all draw commands are rasterised.
+                // Flush the Skia canvas so all draw commands are submitted.
+                // Submit(false) avoids stalling the CPU; the pipeline barriers
+                // in GpuCopyImage handle correct GPU ordering.
                 _skSurface.Canvas.Flush();
                 _grContext?.Flush();
-                _grContext?.Submit(true);
+                _grContext?.Submit(false);
 
                 bool gpuCopyOk = true;
                 if (_useGpuCopy)

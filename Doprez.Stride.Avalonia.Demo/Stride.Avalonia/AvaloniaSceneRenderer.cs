@@ -59,7 +59,6 @@ public class AvaloniaSceneRenderer : SceneRendererBase
     public int MaxDirtyUpdatesPerFrame { get; set; } = 50;
 
     private static readonly Logger _log = GlobalLogger.GetLogger(nameof(AvaloniaSceneRenderer));
-    private bool _loggedComponentDiag;
 
     protected override void InitializeCore()
     {
@@ -104,27 +103,6 @@ public class AvaloniaSceneRenderer : SceneRendererBase
             return;
         }
 
-        // One-time diagnostic: dump component state
-        if (!_loggedComponentDiag && _frameCounter > 10)
-        {
-            _loggedComponentDiag = true;
-            int fs = 0, ws = 0;
-            foreach (var c in components)
-            {
-                if (c.IsFullScreen) fs++;
-                else ws++;
-                var rs = c.Page?.RenderSurface;
-                var tex = rs?.StrideTexture;
-                System.Console.Error.WriteLine(
-                    $"[Stride.Avalonia] Component '{c.Entity?.Name}' fullscreen={c.IsFullScreen} " +
-                    $"res={c.Resolution} enabled={c.Enabled} page={c.Page != null} " +
-                    $"surface={rs != null} surfaceSize={rs?.Width}x{rs?.Height} " +
-                    $"tex={tex != null} renderVer={rs?.RenderVersion} " +
-                    $"isDirty={c.Page?.IsDirty}");
-            }
-            System.Console.Error.WriteLine(
-                $"[Stride.Avalonia] Total={components.Count} fullscreen={fs} worldspace={ws}");
-        }
         using (Profiler.Begin(AvaloniaProfilingKeys.SortComponents))
         {
             SortComponents(components);
@@ -463,52 +441,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
         metrics.AtlasCount = _atlasManager?.AtlasCount ?? 0;
         metrics.DrawTotalMs = AvaloniaRenderMetrics.ElapsedMs(drawStart);
 
-        // Steady-state diagnostic: at frame 100, log which panels are still
-        // missing textures/surfaces so we can identify the root cause of
-        // permanently invisible panels.
-        if (_frameCounter == 100)
-        {
-            int hasTexCount = 0, noTexCount = 0, noSurfCount = 0, noCaptured = 0;
-            foreach (var comp in components)
-            {
-                if (!comp.Enabled || comp.Page == null || comp.IsFullScreen) continue;
-                var rs = comp.Page.RenderSurface;
-                if (rs == null) { noSurfCount++; continue; }
-                if (rs.StrideTexture == null) { noTexCount++; continue; }
-                if (rs.RenderVersion == 0) { noCaptured++; }
-                hasTexCount++;
-            }
-            System.Console.Error.WriteLine(
-                $"[Stride.Avalonia] Frame100: hasTex={hasTexCount} noTex={noTexCount} " +
-                $"noSurf={noSurfCount} renderVer0={noCaptured} " +
-                $"drawn={panelsDrawn} culled={panelsCulled} skipped={panelsDirtySkipped} " +
-                $"atlasQ={_worldSpaceQueue.Count} nonAtlasQ={_worldSpaceNonAtlas.Count} " +
-                $"texCache={_textures.Count}");
 
-            // Log any panels that have texture but RenderVersion=0
-            int logged = 0;
-            foreach (var comp in components)
-            {
-                if (comp.IsFullScreen || !comp.Enabled || comp.Page == null) continue;
-                var rs = comp.Page.RenderSurface;
-                if (rs == null)
-                {
-                    System.Console.Error.WriteLine(
-                        $"[Stride.Avalonia] MISSING-SURF: '{comp.Entity?.Name}' " +
-                        $"isDirty={comp.Page.IsDirty} hasWindow={comp.Page.Window != null}");
-                    if (++logged > 20) break;
-                }
-                else if (rs.RenderVersion == 0)
-                {
-                    System.Console.Error.WriteLine(
-                        $"[Stride.Avalonia] STUCK-RV0: '{comp.Entity?.Name}' " +
-                        $"size={rs.Width}x{rs.Height} tex={rs.StrideTexture != null} " +
-                        $"needsRecap={rs.NeedsRecapture} isDirty={comp.Page.IsDirty} " +
-                        $"sessions={rs.SessionCount} vkHandle={rs.VkImageHandle}");
-                    if (++logged > 20) break;
-                }
-            }
-        }
     }
 
     private bool TryGetCurrentTexture(AvaloniaComponent comp, out Texture? texture)

@@ -2,20 +2,19 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
-using System;
 
 namespace Doprez.Stride.Avalonia.Demo;
 
 /// <summary>
-/// A minimal Avalonia control that displays a counter label and a progress bar
-/// that fills over 10 seconds and resets at 100%.
+/// A minimal Avalonia control that displays a counter label and a progress bar.
+/// Progress is driven externally via <see cref="AdvanceProgress"/> so that
+/// the caller can stagger updates across frames instead of ticking all
+/// instances simultaneously.
 /// </summary>
 public class CounterLabel : UserControl
 {
     private readonly TextBlock _label;
     private readonly ProgressBar _progressBar;
-    private DispatcherTimer? _timer;
 
     public CounterLabel()
     {
@@ -54,14 +53,12 @@ public class CounterLabel : UserControl
                 },
             },
         };
-
-        #warning should make a better update example. This causes REAL bad stutter when you have many instances due to all updating in the same frame.
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _timer.Tick += OnTimerTick;
-        _timer.Start();
     }
 
-    private void OnTimerTick(object? sender, EventArgs e)
+    /// <summary>
+    /// Advances the progress bar by 10%. Resets to 0 at 100%.
+    /// </summary>
+    public void AdvanceProgress()
     {
         var next = _progressBar.Value + 10;
         _progressBar.Value = next >= 100 ? 0 : next;
@@ -73,14 +70,5 @@ public class CounterLabel : UserControl
     public void SetCount(int count)
     {
         _label.Text = count.ToString();
-    }
-
-    /// <summary>
-    /// Stops the timer to prevent leaks when the control is removed.
-    /// </summary>
-    public void StopTimer()
-    {
-        _timer?.Stop();
-        _timer = null;
     }
 }

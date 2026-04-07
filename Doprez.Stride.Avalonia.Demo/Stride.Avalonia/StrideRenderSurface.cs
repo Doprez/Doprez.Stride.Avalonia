@@ -17,20 +17,12 @@ internal sealed class StrideRenderSurface : IDisposable
     private int _width;
     private int _height;
     private bool _isTearingDown;
-    private bool _loggedGpuCopy;
-
     // Skia-managed surface for the Vulkan GPU copy path
     private SKSurface? _skiaManagedSurface;
     private ulong _skiaVkImageHandle;
     private bool _vkImageCaptureInProgress;
     private long _captureToken;
     private bool _needsRecapture;
-
-    /// <summary>Diagnostic: how many times BeginRenderingSession has been called.</summary>
-    internal int SessionCount { get; private set; }
-
-    /// <summary>Diagnostic: captured VkImage handle (0 = never captured).</summary>
-    internal ulong VkImageHandle => _skiaVkImageHandle;
 
     /// <summary>Width of the rendering surface in pixels.</summary>
     public int Width => _width;
@@ -110,8 +102,6 @@ internal sealed class StrideRenderSurface : IDisposable
     /// </summary>
     public (SKSurface Surface, GRContext? GrContext, GRBackendRenderTarget? BackendRenderTarget, object? SyncScope, bool DisposeSurface) BeginRenderingSession()
     {
-        SessionCount++;
-
         if (_width <= 0 || _height <= 0)
             throw new InvalidOperationException("Render surface size must be established before rendering begins.");
 
@@ -289,12 +279,6 @@ internal sealed class StrideRenderSurface : IDisposable
                 StrideVulkanInterop.GraphicsQueueFamilyIndex,
                 Vortice.Vulkan.VkImageAspectFlags.Color));
 
-        if (!_loggedGpuCopy && _strideTexture.Width > 1 && _strideTexture.Height > 1)
-        {
-            Console.Error.WriteLine($"[Stride.Avalonia] GPU copy active: {_strideTexture.Width}x{_strideTexture.Height}");
-            _loggedGpuCopy = true;
-        }
-
         return true;
     }
 
@@ -372,7 +356,6 @@ internal sealed class StrideRenderSurface : IDisposable
         _skiaManagedSurface?.Dispose();
         _skiaManagedSurface = null;
         _skiaVkImageHandle = 0;
-        _loggedGpuCopy = false;
 
         if (disposeTexture)
         {
