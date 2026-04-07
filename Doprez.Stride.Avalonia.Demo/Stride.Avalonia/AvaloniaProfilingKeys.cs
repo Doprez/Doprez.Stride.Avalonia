@@ -44,10 +44,6 @@ public static class AvaloniaProfilingKeys
     public static readonly ProfilingKey FrameCapture =
         new(Draw, "Avalonia.Draw.FrameCapture");
 
-    /// <summary>CPU→GPU texture upload via <c>SetData()</c>.</summary>
-    public static readonly ProfilingKey TextureUpload =
-        new(Draw, "Avalonia.Draw.TextureUpload");
-
     /// <summary>SpriteBatch Begin/Draw/End calls.</summary>
     public static readonly ProfilingKey SpriteBatchDraw =
         new(Draw, "Avalonia.Draw.SpriteBatchDraw");

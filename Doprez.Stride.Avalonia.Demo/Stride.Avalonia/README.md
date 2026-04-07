@@ -1,14 +1,20 @@
 # Stride.Avalonia
 
-Core bridge library that enables rendering Avalonia UI controls inside the Stride 3D game engine. This is the foundational package — all other packages in this repository depend on it.
+Core bridge library that enables rendering Avalonia UI controls inside the Stride 3D game engine. Rendering is exclusively through shared GPU texture interop — Avalonia's Skia compositor writes directly into Stride-owned textures with no CPU upload path. This is the foundational package — all other packages in this repository depend on it.
 
 ## How It Works
 
 1. **Headless Avalonia** — `AvaloniaApp.EnsureInitialized<T>()` boots Avalonia's headless platform with Skia rendering (no native window). Your `AvaloniaApp` subclass configures themes and styles.
-2. **Offscreen pages** — `AvaloniaPage` creates a headless `Window`, manages frame capture with dirty-tracking, and provides the raw pixel data. Uses reflection to access `HeadlessWindowImpl._lastRenderedFrame` directly, avoiding LOH allocations from `CaptureRenderedFrame()`.
+2. **Offscreen pages** — `AvaloniaPage` creates a headless `Window`, tracks dirty state, and resolves a `StrideRenderSurface` created by Avalonia's compositor. A shared `GRContext` (created from the Stride `GraphicsDevice`) enables Avalonia to render directly into Stride-owned GPU textures.
 3. **Entity integration** — `AvaloniaComponent` is a Stride `EntityComponent` that attaches an Avalonia page to an entity. Supports fullscreen overlays and world-space 3D panels.
 4. **Game system** — `AvaloniaSystem` runs every frame during the Update phase, collecting all `AvaloniaComponent` instances, forwarding Stride input to Avalonia, and pumping the Avalonia dispatcher.
-5. **Rendering** — `AvaloniaSceneRenderer` captures each component's Avalonia frame, uploads pixel data to GPU textures, and draws via `SpriteBatch` (fullscreen) or `Sprite3DBatch` (world-space).
+5. **Rendering** — `AvaloniaSceneRenderer` observes each component's latest Avalonia render, samples the shared Stride texture directly, and draws via `SpriteBatch` (fullscreen) or `Sprite3DBatch` (world-space).
+
+## Supported Backends
+
+- **Vulkan** — shared GPU texture interop via `StrideVulkanInterop`
+- **Direct3D11** — shared GPU texture interop via `StrideDirect3D11Interop`
+- **Other backends** — rejected at startup with a clear error message
 
 ## Features
 
@@ -32,11 +38,11 @@ Core bridge library that enables rendering Avalonia UI controls inside the Strid
 
 ### Performance
 - **Zero-allocation input bridge** — `AvaloniaInputBridge` uses compiled expression delegates to call `PlatformImpl.Input` directly, bypassing `HeadlessWindowExtensions` which runs jobs 20x per event
-- **Direct framebuffer access** — reflection-based shortcut avoids LOH allocations
-- **Dirty-update throttling** — `MaxDirtyUpdatesPerFrame` on `AvaloniaSceneRenderer` limits GPU texture uploads per frame
+- **Shared-texture rendering** — dirty panels are rendered straight into Stride-owned textures with no CPU pixel copy or `Texture.SetData()` upload
+- **Dirty-update throttling** — `MaxDirtyUpdatesPerFrame` on `AvaloniaSceneRenderer` limits how many dirty panels are refreshed per frame
 
 ### Profiling
-- **`AvaloniaRenderMetrics`** — singleton tracking per-phase timings (update, input, dispatcher, draw, capture, upload, sprite batch), panel counts, bytes uploaded, GC pressure, and rolling 120-frame history
+- **`AvaloniaRenderMetrics`** — singleton tracking per-phase timings (update, input, dispatcher, draw, render observation, sprite batch), panel counts, GC pressure, and rolling 120-frame history
 - **`AvaloniaProfilingKeys`** — integration with Stride's built-in profiler overlay
 - **`DebugPanel`** — ready-to-use Avalonia `UserControl` displaying FPS, frame time, entity count, draw calls, triangles, memory, uptime, and detailed per-phase Avalonia metrics
 
@@ -45,11 +51,11 @@ Core bridge library that enables rendering Avalonia UI controls inside the Strid
 | Class | Description |
 |-------|-------------|
 | `AvaloniaApp` | Minimal `Application` subclass; call `EnsureInitialized<T>()` to boot headless Avalonia |
-| `AvaloniaPage` | Abstract base for offscreen UI pages with dirty-tracking and frame capture |
+| `AvaloniaPage` | Abstract base for offscreen UI pages with dirty-tracking and render-version observation |
 | `DefaultAvaloniaPage` | Convenience wrapper that hosts any existing Avalonia `Control` |
 | `AvaloniaComponent` | Stride `EntityComponent` — attach to an entity to display Avalonia UI |
 | `AvaloniaSystem` | `GameSystemBase` — input forwarding and dispatcher pumping |
-| `AvaloniaSceneRenderer` | `SceneRendererBase` — frame capture, GPU upload, and sprite drawing |
+| `AvaloniaSceneRenderer` | `SceneRendererBase` — shared-texture sampling and sprite drawing |
 | `AvaloniaInputBridge` | Low-level input injection into headless Avalonia windows |
 | `AvaloniaInputMapper` | Stride-to-Avalonia key/mouse/modifier mapping |
 | `AvaloniaTextureAtlas` | Shelf-based GPU texture packer |

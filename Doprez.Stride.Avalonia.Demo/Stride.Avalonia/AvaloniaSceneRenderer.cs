@@ -15,9 +15,9 @@ namespace Stride.Avalonia;
 
 /// <summary>
 /// A <see cref="SceneRendererBase"/> that captures each <see cref="AvaloniaComponent"/>'s
-/// headless frame, copies the pixel data to a Stride texture, and draws it
-/// using <see cref="SpriteBatch"/> (fullscreen) or <see cref="Sprite3DBatch"/> +
-/// texture atlas (world-space panels).
+/// headless frame and samples the shared Stride texture directly.
+/// Panels are drawn using <see cref="SpriteBatch"/> (fullscreen) or
+/// <see cref="Sprite3DBatch"/> plus a texture atlas (world-space panels).
 /// </summary>
 /// <remarks>
 /// World-space panels are packed into a shared atlas texture so that
@@ -124,9 +124,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
         int panelsCulled = 0;
         int panelsDirtyUpdated = 0;
         int panelsDirtySkipped = 0;
-        long bytesUploaded = 0;
         double captureAccum = 0;
-        double uploadAccum = 0;
         double drawAccum = 0;
 
         _worldSpaceQueue.Clear();
@@ -138,7 +136,12 @@ public class AvaloniaSceneRenderer : SceneRendererBase
         // ──────────────────────────────────────────────
         foreach (var comp in components)
         {
-            if (!comp.Enabled || comp.Page == null) continue;
+            if (!comp.Enabled || comp.Page == null)
+            {
+                _atlasManager?.Remove(comp);
+                _textures.Remove(comp);
+                continue;
+            }
 
             int resW = (int)comp.Resolution.X;
             int resH = (int)comp.Resolution.Y;
@@ -155,6 +158,9 @@ public class AvaloniaSceneRenderer : SceneRendererBase
                 }
             }
 
+            if (comp.IsFullScreen || !comp.UseAtlas)
+                _atlasManager?.Remove(comp);
+
             // --- Frustum culling for world-space panels ---
             if (!comp.IsFullScreen && _hasCameraMatrices)
             {
@@ -168,24 +174,33 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
             comp.Page.EnsureWindow(resW, resH);
             comp.Page.Resize(resW, resH);
+            comp.Page.EnsureGpuSurface(GraphicsDevice);
 
             bool wasDirty = comp.Page.IsDirty;
 
             // Check whether this panel already has a rendered texture.
-            // Panels that have never been captured must always be allowed
-            // through regardless of the dirty budget — otherwise
-            // ContinuousRedraw panels can monopolise the budget and
-            // prevent other panels from ever getting their first capture.
-            bool hasExistingTexture = comp.IsFullScreen || !comp.UseAtlas
-                ? _textures.ContainsKey(comp)
-                : _atlasManager!.TryGetSourceRect(comp, out _, out _);
+            bool hasExistingTexture = TryGetCurrentTexture(comp, out _);
+            bool needsFirstTexture = !hasExistingTexture;
 
             // Decide whether to (re-)capture this panel's frame.
+            // Fullscreen panels are expensive to upload, so they should follow
+            // the same dirty/no-texture policy as world-space panels.
             bool shouldCapture;
-            if (!wasDirty || comp.IsFullScreen || !hasExistingTexture)
+            if (comp.IsFullScreen)
             {
-                // Not dirty, fullscreen, or first-ever capture → always allow.
-                shouldCapture = true;
+                shouldCapture = needsFirstTexture || wasDirty;
+            }
+            else if (needsFirstTexture)
+            {
+                // Newly visible world-space panels are cold-start work.
+                // Throttle them through the normal per-frame budget so a
+                // camera move or initial view doesn't upload hundreds of
+                // textures in a single frame.
+                shouldCapture = dirtyUpdatesThisFrame < dirtyLimit;
+            }
+            else if (!wasDirty)
+            {
+                shouldCapture = false;
             }
             else if (comp.ContinuousRedraw)
             {
@@ -202,43 +217,46 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
             if (comp.IsFullScreen)
             {
-                // ── Fullscreen: per-panel texture (not atlased) ──
-                Texture? texture;
+                // ── Fullscreen ──
                 if (shouldCapture)
                 {
                     long tCapture = Stopwatch.GetTimestamp();
-                    bool frameAvailable;
+                    bool captured;
                     using (Profiler.Begin(AvaloniaProfilingKeys.FrameCapture))
                     {
-                        frameAvailable = comp.Page.CaptureFrame();
+                        captured = comp.Page.CaptureFrame();
                     }
                     captureAccum += AvaloniaRenderMetrics.ElapsedMs(tCapture);
-                    if (!frameAvailable) continue;
 
-                    _textures.TryGetValue(comp, out texture);
-                    bool hasNewContent = comp.Page.HasNewContent;
-
-                    if (texture == null || (wasDirty && hasNewContent))
+                    if (!captured)
                     {
-                        long tUpload = Stopwatch.GetTimestamp();
-                        using (Profiler.Begin(AvaloniaProfilingKeys.TextureUpload))
+                        if (!TryGetCurrentTexture(comp, out _))
                         {
-                            using var pixels = comp.Page.LockPixels();
-                            texture = UpdateTexture(comp, pixels, commandList);
+                            panelsDirtySkipped++;
+                            continue;
                         }
-                        uploadAccum += AvaloniaRenderMetrics.ElapsedMs(tUpload);
-                        if (texture == null) continue;
-                        if (wasDirty && hasNewContent)
-                        {
-                            dirtyUpdatesThisFrame++;
-                            panelsDirtyUpdated++;
-                            bytesUploaded += (long)resW * resH * 4;
-                        }
+
+                        panelsDirtySkipped++;
+                        if (comp.Page.Content.IsVisible)
+                            _fullscreenQueue.Add(comp);
+                        continue;
+                    }
+
+                    var strideTexture = comp.Page.RenderSurface?.StrideTexture;
+                    if (strideTexture == null) continue;
+
+                    // Register in _textures for the draw phase
+                    _textures[comp] = strideTexture;
+
+                    if (wasDirty)
+                    {
+                        dirtyUpdatesThisFrame++;
+                        panelsDirtyUpdated++;
                     }
                 }
                 else
                 {
-                    if (!_textures.TryGetValue(comp, out texture) || texture == null)
+                    if (!TryGetCurrentTexture(comp, out _))
                     {
                         panelsDirtySkipped++;
                         continue;
@@ -246,58 +264,59 @@ public class AvaloniaSceneRenderer : SceneRendererBase
                     panelsDirtySkipped++;
                 }
 
-                // Queue fullscreen panel for drawing after world-space panels
-                _fullscreenQueue.Add(comp);
+                // Queue fullscreen panel for drawing after world-space panels.
+                // Hidden fullscreen roots (for example, a closed pause menu)
+                // do not need a fullscreen draw pass.
+                if (comp.Page.Content.IsVisible)
+                    _fullscreenQueue.Add(comp);
             }
             else
             {
                 // ── World-space panel ──
                 if (comp.UseAtlas)
                 {
-                    // Atlas path: pack into shared atlas texture(s)
-                    int atlasIdx;
+                    // Atlas world-space panel
+                    bool capturedThisFrame = false;
                     if (shouldCapture)
                     {
                         long tCapture = Stopwatch.GetTimestamp();
-                        bool frameAvailable;
+                        bool captured;
                         using (Profiler.Begin(AvaloniaProfilingKeys.FrameCapture))
                         {
-                            frameAvailable = comp.Page.CaptureFrame();
+                            captured = comp.Page.CaptureFrame();
                         }
                         captureAccum += AvaloniaRenderMetrics.ElapsedMs(tCapture);
-                        if (!frameAvailable) continue;
 
-                        bool hasAtlasSlot = _atlasManager!.TryGetSourceRect(comp, out _, out _);
-                        bool hasNewContent = comp.Page.HasNewContent;
-
-                        if (!hasAtlasSlot || (wasDirty && hasNewContent))
+                        if (!captured)
                         {
-                            long tUpload = Stopwatch.GetTimestamp();
-                            using (Profiler.Begin(AvaloniaProfilingKeys.TextureUpload))
+                            if (!TryGetCurrentTexture(comp, out _))
                             {
-                                if (!_atlasManager.EnsureSlot(comp, resW, resH, commandList, out _, out atlasIdx))
-                                {
-                                    continue;
-                                }
-                                using var pixels = comp.Page.LockPixels();
-                                _atlasManager.UpdateSlot(comp, pixels, commandList);
+                                panelsDirtySkipped++;
+                                continue;
                             }
-                            uploadAccum += AvaloniaRenderMetrics.ElapsedMs(tUpload);
-                            if (wasDirty && hasNewContent)
-                            {
-                                dirtyUpdatesThisFrame++;
-                                panelsDirtyUpdated++;
-                                bytesUploaded += (long)resW * resH * 4;
-                            }
+
+                            panelsDirtySkipped++;
+                            capturedThisFrame = false;
                         }
-                        else
+
+                        if (captured)
                         {
-                            _atlasManager.TryGetSourceRect(comp, out _, out atlasIdx);
+                            var strideTexture = comp.Page.RenderSurface?.StrideTexture;
+                            if (strideTexture == null) continue;
+
+                            _textures[comp] = strideTexture;
+                            capturedThisFrame = true;
+
+                            dirtyUpdatesThisFrame++;
+                            if (wasDirty)
+                            {
+                                panelsDirtyUpdated++;
+                            }
                         }
                     }
                     else
                     {
-                        if (!_atlasManager!.TryGetSourceRect(comp, out _, out atlasIdx))
+                        if (!TryGetCurrentTexture(comp, out _))
                         {
                             panelsDirtySkipped++;
                             continue;
@@ -305,47 +324,54 @@ public class AvaloniaSceneRenderer : SceneRendererBase
                         panelsDirtySkipped++;
                     }
 
-                    _worldSpaceQueue.Add((comp, atlasIdx));
+                    if (!TryGetCurrentTexture(comp, out var atlasSourceTexture) || atlasSourceTexture == null)
+                        continue;
+
+                    _textures[comp] = atlasSourceTexture;
+
+                    if (!TryQueueAtlasComponent(comp, atlasSourceTexture, resW, resH, commandList, capturedThisFrame))
+                        _worldSpaceNonAtlas.Add(comp);
                 }
                 else
                 {
-                    // Non-atlas path: per-panel texture (same as fullscreen upload)
-                    Texture? texture;
+                    // Non-atlas world-space panel
                     if (shouldCapture)
                     {
                         long tCapture = Stopwatch.GetTimestamp();
-                        bool frameAvailable;
+                        bool captured;
                         using (Profiler.Begin(AvaloniaProfilingKeys.FrameCapture))
                         {
-                            frameAvailable = comp.Page.CaptureFrame();
+                            captured = comp.Page.CaptureFrame();
                         }
                         captureAccum += AvaloniaRenderMetrics.ElapsedMs(tCapture);
-                        if (!frameAvailable) continue;
 
-                        _textures.TryGetValue(comp, out texture);
-                        bool hasNewContent = comp.Page.HasNewContent;
-
-                        if (texture == null || (wasDirty && hasNewContent))
+                        if (!captured)
                         {
-                            long tUpload = Stopwatch.GetTimestamp();
-                            using (Profiler.Begin(AvaloniaProfilingKeys.TextureUpload))
+                            if (!TryGetCurrentTexture(comp, out _))
                             {
-                                using var pixels = comp.Page.LockPixels();
-                                texture = UpdateTexture(comp, pixels, commandList);
+                                panelsDirtySkipped++;
+                                continue;
                             }
-                            uploadAccum += AvaloniaRenderMetrics.ElapsedMs(tUpload);
-                            if (texture == null) continue;
-                            if (wasDirty && hasNewContent)
-                            {
-                                dirtyUpdatesThisFrame++;
-                                panelsDirtyUpdated++;
-                                bytesUploaded += (long)resW * resH * 4;
-                            }
+
+                            panelsDirtySkipped++;
+                            _worldSpaceNonAtlas.Add(comp);
+                            continue;
+                        }
+
+                        var strideTexture = comp.Page.RenderSurface?.StrideTexture;
+                        if (strideTexture == null) continue;
+
+                        _textures[comp] = strideTexture;
+
+                        dirtyUpdatesThisFrame++;
+                        if (wasDirty)
+                        {
+                            panelsDirtyUpdated++;
                         }
                     }
                     else
                     {
-                        if (!_textures.TryGetValue(comp, out texture) || texture == null)
+                        if (!TryGetCurrentTexture(comp, out _))
                         {
                             panelsDirtySkipped++;
                             continue;
@@ -392,13 +418,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
             long tDrawFs = Stopwatch.GetTimestamp();
             using (Profiler.Begin(AvaloniaProfilingKeys.SpriteBatchDraw))
             {
-                foreach (var comp in _fullscreenQueue)
-                {
-                    if (_textures.TryGetValue(comp, out var fsTex) && fsTex != null)
-                    {
-                        DrawFullscreen(drawContext, fsTex, backBuffer);
-                    }
-                }
+                DrawFullscreenQueue(drawContext, backBuffer);
             }
             drawAccum += AvaloniaRenderMetrics.ElapsedMs(tDrawFs);
             panelsDrawn += _fullscreenQueue.Count;
@@ -409,70 +429,77 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
         // ── Store metrics ──
         metrics.FrameCaptureMs = captureAccum;
-        metrics.TextureUploadMs = uploadAccum;
         metrics.SpriteBatchDrawMs = drawAccum;
         metrics.PanelsDrawn = panelsDrawn;
         metrics.PanelsCulled = panelsCulled;
         metrics.PanelsDirtyUpdated = panelsDirtyUpdated;
         metrics.PanelsDirtySkipped = panelsDirtySkipped;
-        metrics.BytesUploaded = bytesUploaded;
         metrics.AtlasCount = _atlasManager?.AtlasCount ?? 0;
         metrics.DrawTotalMs = AvaloniaRenderMetrics.ElapsedMs(drawStart);
     }
 
-    // ──────────────────────────────────────────────
-    //  Texture Management
-    // ──────────────────────────────────────────────
-
-    private unsafe Texture? UpdateTexture(
-        AvaloniaComponent comp, PixelAccess pixels,
-        CommandList commandList)
+    private bool TryGetCurrentTexture(AvaloniaComponent comp, out Texture? texture)
     {
-        int bmpW = pixels.Width;
-        int bmpH = pixels.Height;
-        if (bmpW <= 0 || bmpH <= 0 || pixels.Address == IntPtr.Zero) return null;
-
-        int expectedBytes = bmpW * bmpH * 4; // BGRA = 4 bytes/pixel
-
-        if (!_textures.TryGetValue(comp, out var texture)
-            || texture.Width != bmpW || texture.Height != bmpH)
+        texture = comp.Page?.RenderSurface?.StrideTexture;
+        if (texture != null)
         {
-            texture?.Dispose();
-            texture = Texture.New2D(
-                GraphicsDevice, bmpW, bmpH,
-                PixelFormat.R8G8B8A8_UNorm_SRgb,
-                TextureFlags.ShaderResource,
-                usage: GraphicsResourceUsage.Default);
             _textures[comp] = texture;
+            return true;
         }
 
-        // Guard: only upload when the pixel data size matches the texture.
-        if (pixels.DataSize < expectedBytes) return texture;
+        return _textures.TryGetValue(comp, out texture) && texture != null;
+    }
 
-        texture.SetData(commandList,
-            new Span<byte>(pixels.Address.ToPointer(), pixels.DataSize));
+    private bool TryQueueAtlasComponent(AvaloniaComponent comp,
+        Texture sourceTexture,
+        int width,
+        int height,
+        CommandList commandList,
+        bool capturedThisFrame)
+    {
+        if (_atlasManager == null)
+            return false;
 
-        return texture;
+        bool hadSlot = _atlasManager.TryGetSourceRect(comp, out _, out _);
+        if (!_atlasManager.EnsureSlot(comp, width, height, commandList, out _, out var atlasIndex))
+            return false;
+
+        if ((capturedThisFrame || !hadSlot)
+            && !_atlasManager.UpdateSlot(comp, sourceTexture, commandList))
+        {
+            _atlasManager.Remove(comp);
+            _log.Warning($"Atlas update failed for '{comp.Entity.Name ?? comp.Entity.Id.ToString()}', falling back to direct panel draw.");
+            return false;
+        }
+
+        _worldSpaceQueue.Add((comp, atlasIndex));
+        return true;
     }
 
     // ──────────────────────────────────────────────
     //  Fullscreen Drawing
     // ──────────────────────────────────────────────
 
-    private void DrawFullscreen(RenderDrawContext drawContext, Texture texture, Texture backBuffer)
+    private void DrawFullscreenQueue(RenderDrawContext drawContext, Texture backBuffer)
     {
         var commandList = drawContext.CommandList;
         commandList.SetRenderTargetAndViewport(null, backBuffer);
 
         _spriteBatch!.Begin(drawContext.GraphicsContext,
-            sortMode: SpriteSortMode.Immediate,
+            sortMode: SpriteSortMode.Deferred,
             blendState: BlendStates.AlphaBlend,
             samplerState: GraphicsDevice.SamplerStates.PointClamp,
             depthStencilState: DepthStencilStates.None);
 
-        _spriteBatch.Draw(texture,
-            new RectangleF(0, 0, backBuffer.Width, backBuffer.Height),
-            Color.White);
+        foreach (var comp in _fullscreenQueue)
+        {
+            if (!TryGetCurrentTexture(comp, out var texture) || texture == null)
+                continue;
+
+            _spriteBatch.Draw(texture,
+                new RectangleF(0, 0, backBuffer.Width, backBuffer.Height),
+                Color.White);
+        }
 
         _spriteBatch.End();
     }
@@ -491,7 +518,7 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
         foreach (var comp in _worldSpaceNonAtlas)
         {
-            if (!_textures.TryGetValue(comp, out var texture) || texture == null)
+            if (!TryGetCurrentTexture(comp, out var texture) || texture == null)
                 continue;
 
             var worldMatrix = comp.GetEffectiveWorldMatrix(_sortCameraPos);
@@ -644,12 +671,17 @@ public class AvaloniaSceneRenderer : SceneRendererBase
 
     protected override void Destroy()
     {
-        foreach (var tex in _textures.Values)
-            tex?.Dispose();
+        StridePlatformGraphics.BeginShutdown();
+
+        // Textures in _textures are owned by StrideRenderSurface — don't dispose them here
         _textures.Clear();
         _atlasManager?.Dispose();
         _sprite3DBatch?.Dispose();
         _spriteBatch?.Dispose();
+
+        // Dispose the shared GRContext
+        StridePlatformGraphics.ResetSharedContext();
+
         base.Destroy();
     }
 }

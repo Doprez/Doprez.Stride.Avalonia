@@ -235,12 +235,21 @@ public class EscapeMenuScript : SyncScript
 
     public override void Cancel()
     {
+        var isGameExiting = Game is Game strideGame && strideGame.IsExiting;
         if (_avaloniaComponent != null)
         {
-            _avaloniaComponent.Page?.Dispose();
-            Entity.Remove(_avaloniaComponent);
+            if (_avaloniaComponent.Page != null)
+            {
+                _avaloniaComponent.Page.Dispose();
+                _avaloniaComponent.Page = null;
+            }
+
+            if (!isGameExiting)
+                Entity.Remove(_avaloniaComponent);
+
             _avaloniaComponent = null;
         }
+
         _menuControl = null;
     }
 }

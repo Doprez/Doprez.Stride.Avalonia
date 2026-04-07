@@ -64,7 +64,7 @@ public class AvaloniaSystem : GameSystemBase
     protected override void LoadContent()
     {
         _input = Services.GetService<InputManager>()!;
-        AvaloniaApp.EnsureInitialized();
+        AvaloniaApp.EnsureInitialized(GraphicsDevice);
 
         if (_input.Keyboard is ITextInputDevice textDevice)
             textDevice.EnabledTextInput();
@@ -228,6 +228,30 @@ public class AvaloniaSystem : GameSystemBase
 
             if (anyDirty)
             {
+                // Ensure render surfaces are correctly sized BEFORE the
+                // compositor renders.  On the first frame, TryCreateRenderTarget
+                // creates a 1×1 fallback surface; this loop sizes it to the
+                // panel's actual resolution so that the compositor renders at
+                // the correct dimensions.
+                foreach (var comp in components)
+                {
+                    if (comp.Enabled && comp.Page != null && comp.Page.IsReady)
+                    {
+                        int resW = (int)comp.Resolution.X;
+                        int resH = (int)comp.Resolution.Y;
+                        if (comp.IsFullScreen && GraphicsDevice?.Presenter?.BackBuffer != null)
+                        {
+                            resW = GraphicsDevice.Presenter.BackBuffer.Width;
+                            resH = GraphicsDevice.Presenter.BackBuffer.Height;
+                        }
+                        if (resW > 0 && resH > 0)
+                        {
+                            comp.Page.Resize(resW, resH);
+                            comp.Page.EnsureGpuSurface(GraphicsDevice);
+                        }
+                    }
+                }
+
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             }
             else
@@ -447,6 +471,8 @@ public class AvaloniaSystem : GameSystemBase
     {
         if (_input?.Keyboard is ITextInputDevice textDevice)
             textDevice.DisableTextInput();
+
+        StridePlatformGraphics.BeginShutdown();
 
         foreach (var comp in CollectComponents())
             comp.Page?.Dispose();

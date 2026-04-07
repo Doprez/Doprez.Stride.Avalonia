@@ -112,16 +112,6 @@ internal sealed class AvaloniaTextureAtlasManager : IDisposable
     }
 
     /// <summary>
-    /// Copies pixel data from a <see cref="PixelAccess"/> into
-    /// the component's allocated region in the correct atlas texture.
-    /// </summary>
-    public void UpdateSlot(AvaloniaComponent comp, PixelAccess pixels, CommandList commandList)
-    {
-        if (!_componentAtlas.TryGetValue(comp, out var idx)) return;
-        _atlases[idx].UpdateSlot(comp, pixels, commandList);
-    }
-
-    /// <summary>
     /// Retrieves the source rectangle and atlas index for a previously
     /// allocated panel.
     /// </summary>
@@ -140,6 +130,17 @@ internal sealed class AvaloniaTextureAtlasManager : IDisposable
         sourceRect = default;
         atlasIndex = -1;
         return false;
+    }
+
+    /// <summary>
+    /// Copies the latest panel texture into the component's allocated atlas slot.
+    /// </summary>
+    public bool UpdateSlot(AvaloniaComponent comp, Texture sourceTexture, CommandList commandList)
+    {
+        if (!_componentAtlas.TryGetValue(comp, out var idx))
+            return false;
+
+        return _atlases[idx].UpdateSlot(comp, sourceTexture, commandList);
     }
 
     /// <summary>Removes a panel's allocation from whichever atlas owns it.</summary>

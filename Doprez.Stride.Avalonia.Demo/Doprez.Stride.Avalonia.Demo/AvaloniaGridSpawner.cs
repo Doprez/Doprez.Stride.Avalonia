@@ -42,7 +42,7 @@ public class AvaloniaGridSpawner : SyncScript
     /// </summary>
     public void Respawn()
     {
-        DespawnGrid();
+        DespawnGrid(removeEntities: true);
         SpawnGrid();
     }
 
@@ -70,7 +70,7 @@ public class AvaloniaGridSpawner : SyncScript
                         Resolution = new Vector2(192, 64),
                         Size = new Vector2(0.5f, 0.25f),
                         UseAtlas = true,
-                        ContinuousRedraw = true,
+                        ContinuousRedraw = false,
                     };
                     avaloniaComponent.Page = page;
 
@@ -92,14 +92,21 @@ public class AvaloniaGridSpawner : SyncScript
         }
     }
 
-    private void DespawnGrid()
+    private void DespawnGrid(bool removeEntities)
     {
         foreach (var entity in _spawnedEntities)
         {
             var comp = entity.Get<AvaloniaComponent>();
-            comp?.Page?.Dispose();
-            Entity.Scene.Entities.Remove(entity);
+            if (comp?.Page != null)
+            {
+                comp.Page.Dispose();
+                comp.Page = null;
+            }
+
+            if (removeEntities)
+                entity.Scene?.Entities.Remove(entity);
         }
+
         _spawnedEntities.Clear();
     }
 
@@ -109,6 +116,7 @@ public class AvaloniaGridSpawner : SyncScript
 
     public override void Cancel()
     {
-        DespawnGrid();
+        var isGameExiting = Game is Game strideGame && strideGame.IsExiting;
+        DespawnGrid(removeEntities: !isGameExiting);
     }
 }
