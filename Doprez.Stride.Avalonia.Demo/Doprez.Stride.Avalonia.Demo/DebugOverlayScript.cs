@@ -109,10 +109,17 @@ public class DebugOverlayScript : SyncScript
 
     public override void Cancel()
     {
+        var isGameExiting = Game is Game strideGame && strideGame.IsExiting;
         var comp = Entity.Get<AvaloniaComponent>();
-        comp?.Page?.Dispose();
-        if (comp != null)
+        if (comp?.Page != null)
+        {
+            comp.Page.Dispose();
+            comp.Page = null;
+        }
+
+        if (comp != null && !isGameExiting)
             Entity.Remove(comp);
+
         _debugPanel = null;
     }
 }

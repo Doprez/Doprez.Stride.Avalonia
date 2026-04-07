@@ -8,7 +8,6 @@ Hierarchy:
     RootParts:
         - ref!! 8e048adf-50ee-4ce2-9e10-0c7223b3369d
         - ref!! c8913191-d39a-4388-8d48-71d0f2d128d1
-        - ref!! 29493c18-fa56-42a1-b65b-f156656bdb11
         - ref!! 833c0ca1-3e40-4b8c-956b-b9c025b0a38a
         - ref!! 398ec687-3731-4d1b-b3c0-9d092a08c591
         - ref!! 62200459-5253-408a-9483-6b494de141f4
@@ -17,23 +16,6 @@ Hierarchy:
         - ref!! e5ca0e01-ae5c-4a0e-b001-e5ca0e01ee01
         - ref!! d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
     Parts:
-        -   Entity:
-                Id: 29493c18-fa56-42a1-b65b-f156656bdb11
-                Name: Skybox
-                Components:
-                    4ff8df364e26caf3cfb7af2a980b55c8: !TransformComponent
-                        Id: c0a6886f-c752-4f82-8abc-660f0a5b37db
-                        Position: {X: 0.0, Y: 2.0, Z: -2.0}
-                        Rotation: {X: 0.0, Y: 0.0, Z: 0.0, W: 1.0}
-                        Scale: {X: 1.0, Y: 1.0, Z: 1.0}
-                        Children: {}
-                    e0c3d913ee6fe942fb90b633bf0b3081: !BackgroundComponent
-                        Id: 0f1f16b0-71a1-4ef5-816d-903c2040fb68
-                        Texture: efbe3889-4355-49a0-b8cb-bac9dd55cca7:Skybox texture
-                    0f6a05882217763b3fc882fefdf8fa95: !LightComponent
-                        Id: 66bac7e9-6a41-41af-9fc1-37e0b53388d1
-                        Type: !LightSkybox
-                            Skybox: 1fb7fbed-6b0a-4fe0-be4d-27e2120d9aba:Skybox
         -   Entity:
                 Id: 398ec687-3731-4d1b-b3c0-9d092a08c591
                 Name: Sphere

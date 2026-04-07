@@ -1,4 +1,3 @@
-using global::Avalonia.Media.Imaging;
 using Stride.Core.Diagnostics;
 using Stride.Core.Mathematics;
 using Stride.Graphics;
@@ -113,16 +112,6 @@ internal sealed class AvaloniaTextureAtlasManager : IDisposable
     }
 
     /// <summary>
-    /// Copies pixel data from a captured <see cref="WriteableBitmap"/> into
-    /// the component's allocated region in the correct atlas texture.
-    /// </summary>
-    public void UpdateSlot(AvaloniaComponent comp, WriteableBitmap bitmap, CommandList commandList)
-    {
-        if (!_componentAtlas.TryGetValue(comp, out var idx)) return;
-        _atlases[idx].UpdateSlot(comp, bitmap, commandList);
-    }
-
-    /// <summary>
     /// Retrieves the source rectangle and atlas index for a previously
     /// allocated panel.
     /// </summary>
@@ -141,6 +130,17 @@ internal sealed class AvaloniaTextureAtlasManager : IDisposable
         sourceRect = default;
         atlasIndex = -1;
         return false;
+    }
+
+    /// <summary>
+    /// Copies the latest panel texture into the component's allocated atlas slot.
+    /// </summary>
+    public bool UpdateSlot(AvaloniaComponent comp, Texture sourceTexture, CommandList commandList)
+    {
+        if (!_componentAtlas.TryGetValue(comp, out var idx))
+            return false;
+
+        return _atlases[idx].UpdateSlot(comp, sourceTexture, commandList);
     }
 
     /// <summary>Removes a panel's allocation from whichever atlas owns it.</summary>

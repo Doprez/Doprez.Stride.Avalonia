@@ -30,6 +30,9 @@ public class AvaloniaGridSpawner : SyncScript
     public int GridSize { get; set; } = 10;
 
     private readonly List<Entity> _spawnedEntities = new();
+    private readonly List<(CounterLabel Label, AvaloniaComponent Component)> _panels = new();
+    private double _tickAccumulator;
+    private int _tickCursor;
 
     public override void Start()
     {
@@ -42,7 +45,7 @@ public class AvaloniaGridSpawner : SyncScript
     /// </summary>
     public void Respawn()
     {
-        DespawnGrid();
+        DespawnGrid(removeEntities: true);
         SpawnGrid();
     }
 
@@ -70,7 +73,7 @@ public class AvaloniaGridSpawner : SyncScript
                         Resolution = new Vector2(192, 64),
                         Size = new Vector2(0.5f, 0.25f),
                         UseAtlas = true,
-                        ContinuousRedraw = true,
+                        ContinuousRedraw = false,
                     };
                     avaloniaComponent.Page = page;
 
@@ -86,29 +89,62 @@ public class AvaloniaGridSpawner : SyncScript
 
                     entity.Scene = Entity.Scene;
                     _spawnedEntities.Add(entity);
+                    _panels.Add((label, avaloniaComponent));
                     count++;
                 }
             }
         }
     }
 
-    private void DespawnGrid()
+    private void DespawnGrid(bool removeEntities)
     {
         foreach (var entity in _spawnedEntities)
         {
             var comp = entity.Get<AvaloniaComponent>();
-            comp?.Page?.Dispose();
-            Entity.Scene.Entities.Remove(entity);
+            if (comp?.Page != null)
+            {
+                comp.Page.Dispose();
+                comp.Page = null;
+            }
+
+            if (removeEntities)
+                entity.Scene?.Entities.Remove(entity);
         }
+
         _spawnedEntities.Clear();
+        _panels.Clear();
+        _tickCursor = 0;
     }
 
     public override void Update()
     {
+        if (_panels.Count == 0) return;
+
+        // Advance progress on a small staggered batch each frame.
+        // Cap per-frame updates to avoid a death spiral where slow frames
+        // accumulate time → more updates → even slower frames.
+        const int maxPerFrame = 50;
+        _tickAccumulator += Game.UpdateTime.Elapsed.TotalSeconds;
+        double tickInterval = 1.0 / _panels.Count; // seconds per label
+        int batchSize = 0;
+        while (_tickAccumulator >= tickInterval && batchSize < maxPerFrame)
+        {
+            _tickAccumulator -= tickInterval;
+            var (label, comp) = _panels[_tickCursor];
+            label.AdvanceProgress();
+            comp.Page?.MarkDirty();
+            _tickCursor = (_tickCursor + 1) % _panels.Count;
+            batchSize++;
+        }
+        // Clamp accumulator so it never builds up beyond one batch worth
+        double maxAccum = tickInterval * maxPerFrame;
+        if (_tickAccumulator > maxAccum)
+            _tickAccumulator = maxAccum;
     }
 
     public override void Cancel()
     {
-        DespawnGrid();
+        var isGameExiting = Game is Game strideGame && strideGame.IsExiting;
+        DespawnGrid(removeEntities: !isGameExiting);
     }
 }

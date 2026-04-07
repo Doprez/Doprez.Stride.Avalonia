@@ -32,10 +32,8 @@ public class DebugPanel : UserControl
     private readonly TextBlock _avDrawTotalText;
     private readonly TextBlock _avCollectSortText;
     private readonly TextBlock _avCaptureText;
-    private readonly TextBlock _avUploadText;
     private readonly TextBlock _avSpriteDrawText;
     private readonly TextBlock _avPanelsText;
-    private readonly TextBlock _avBytesText;
     private readonly TextBlock _avAtlasCountText;
     private readonly TextBlock _avGcText;
     private readonly TextBlock _avFrameTimeText;
@@ -89,10 +87,8 @@ public class DebugPanel : UserControl
         _avDrawTotalText = MakeLabel("Draw: -- ms");
         _avCollectSortText = MakeLabel("  Collect+Sort: -- ms");
         _avCaptureText = MakeLabel("  Capture: -- ms");
-        _avUploadText = MakeLabel("  Upload: -- ms");
         _avSpriteDrawText = MakeLabel("  SpriteBatch: -- ms");
         _avPanelsText = MakeLabel("Panels: --");
-        _avBytesText = MakeLabel("Uploaded: -- B");
         _avAtlasCountText = MakeLabel("Atlases: --");
         _avGcText = MakeLabel("GC: --");
         _avFrameTimeText = MakeLabel("Frame: avg -- / peak -- ms");
@@ -113,11 +109,9 @@ public class DebugPanel : UserControl
                 _avDrawTotalText,
                 _avCollectSortText,
                 _avCaptureText,
-                _avUploadText,
                 _avSpriteDrawText,
                 new Separator { Margin = new Thickness(0, 2), Background = Brushes.Transparent },
                 _avPanelsText,
-                _avBytesText,
                 _avAtlasCountText,
                 _avGcText,
                 _avFrameTimeText,
@@ -167,9 +161,8 @@ public class DebugPanel : UserControl
     private bool _snapshotHasGame;
     private double _snapshotAvUpdate, _snapshotAvInput, _snapshotAvDispatcher;
     private double _snapshotAvDrawTotal, _snapshotAvCollectSort, _snapshotAvCapture;
-    private double _snapshotAvUpload, _snapshotAvSprite;
+    private double _snapshotAvSprite;
     private int _snapshotAvDrawn, _snapshotAvCulled, _snapshotAvDirtyUpd, _snapshotAvDirtySkip;
-    private long _snapshotAvBytes;
     private int _snapshotAvAtlasCount;
     private int _snapshotAvGc0, _snapshotAvGc1, _snapshotAvGc2;
     private double _snapshotAvAvgFrame, _snapshotAvPeakFrame;
@@ -225,13 +218,11 @@ public class DebugPanel : UserControl
         _snapshotAvDrawTotal = m.DrawTotalMs;
         _snapshotAvCollectSort = m.DrawCollectSortMs;
         _snapshotAvCapture = m.FrameCaptureMs;
-        _snapshotAvUpload = m.TextureUploadMs;
         _snapshotAvSprite = m.SpriteBatchDrawMs;
         _snapshotAvDrawn = m.PanelsDrawn;
         _snapshotAvCulled = m.PanelsCulled;
         _snapshotAvDirtyUpd = m.PanelsDirtyUpdated;
         _snapshotAvDirtySkip = m.PanelsDirtySkipped;
-        _snapshotAvBytes = m.BytesUploaded;
         _snapshotAvAtlasCount = m.AtlasCount;
         _snapshotAvGc0 = m.GcGen0;
         _snapshotAvGc1 = m.GcGen1;
@@ -282,10 +273,8 @@ public class DebugPanel : UserControl
             _avDrawTotalText.Text = $"Draw: {_snapshotAvDrawTotal:F3} ms";
             _avCollectSortText.Text = $"  Collect+Sort: {_snapshotAvCollectSort:F3} ms";
             _avCaptureText.Text = $"  Capture: {_snapshotAvCapture:F3} ms";
-            _avUploadText.Text = $"  Upload: {_snapshotAvUpload:F3} ms";
             _avSpriteDrawText.Text = $"  SpriteBatch: {_snapshotAvSprite:F3} ms";
             _avPanelsText.Text = $"Panels: {_snapshotAvDrawn} drawn  {_snapshotAvCulled} culled  {_snapshotAvDirtyUpd} dirty  {_snapshotAvDirtySkip} skipped";
-            _avBytesText.Text = $"Uploaded: {_snapshotAvBytes / 1024.0:F1} KB";
             _avAtlasCountText.Text = $"Atlases: {_snapshotAvAtlasCount}";
             _avGcText.Text = $"GC: {_snapshotAvGc0}/{_snapshotAvGc1}/{_snapshotAvGc2} (gen0/1/2)";
             _avFrameTimeText.Text = $"Frame: avg {_snapshotAvAvgFrame:F2} / peak {_snapshotAvPeakFrame:F2} ms";

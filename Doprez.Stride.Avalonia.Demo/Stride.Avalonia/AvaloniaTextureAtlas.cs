@@ -1,4 +1,3 @@
-using global::Avalonia.Media.Imaging;
 using Stride.Core.Mathematics;
 using Stride.Graphics;
 using System;
@@ -114,32 +113,6 @@ internal sealed class AvaloniaTextureAtlas : IDisposable
     }
 
     /// <summary>
-    /// Copies pixel data from a captured <see cref="WriteableBitmap"/> into
-    /// the panel's allocated region in the atlas texture.
-    /// </summary>
-    public unsafe void UpdateSlot(AvaloniaComponent comp, WriteableBitmap bitmap, CommandList commandList)
-    {
-        if (_texture == null || !_slots.TryGetValue(comp, out var slot))
-            return;
-
-        using var fb = bitmap.Lock();
-
-        var region = new ResourceRegion(
-            left: slot.X,
-            top: slot.Y,
-            front: 0,
-            right: slot.X + slot.Width,
-            bottom: slot.Y + slot.Height,
-            back: 1);
-
-        int dataSize = fb.RowBytes * fb.Size.Height;
-
-        _texture.SetData(commandList,
-            new Span<byte>(fb.Address.ToPointer(), dataSize),
-            region: region);
-    }
-
-    /// <summary>
     /// Retrieves the source rectangle for a previously allocated panel.
     /// </summary>
     public bool TryGetSourceRect(AvaloniaComponent comp, out RectangleF sourceRect)
@@ -151,6 +124,23 @@ internal sealed class AvaloniaTextureAtlas : IDisposable
         }
         sourceRect = default;
         return false;
+    }
+
+    /// <summary>
+    /// Copies the latest panel texture into the component's atlas slot using
+    /// a GPU-side texture copy.
+    /// </summary>
+    public bool UpdateSlot(AvaloniaComponent comp, Texture sourceTexture, CommandList commandList)
+    {
+        if (_texture == null || !_slots.TryGetValue(comp, out var slot))
+            return false;
+
+        if (sourceTexture.Width != slot.Width || sourceTexture.Height != slot.Height)
+            return false;
+
+        var srcRegion = new ResourceRegion(0, 0, 0, sourceTexture.Width, sourceTexture.Height, 1);
+        commandList.CopyRegion(sourceTexture, 0, srcRegion, _texture, 0, slot.X, slot.Y, 0);
+        return true;
     }
 
     /// <summary>Removes a panel's allocation from the atlas.</summary>
@@ -207,7 +197,7 @@ internal sealed class AvaloniaTextureAtlas : IDisposable
 
         var newTexture = Stride.Graphics.Texture.New2D(
             _device, newW, newH,
-            PixelFormat.R8G8B8A8_UNorm_SRgb,
+            PixelFormat.R8G8B8A8_UNorm,
             TextureFlags.ShaderResource,
             usage: GraphicsResourceUsage.Default);
 
@@ -241,7 +231,7 @@ internal sealed class AvaloniaTextureAtlas : IDisposable
 
         _texture = Stride.Graphics.Texture.New2D(
             _device, _atlasWidth, _atlasHeight,
-            PixelFormat.R8G8B8A8_UNorm_SRgb,
+            PixelFormat.R8G8B8A8_UNorm,
             TextureFlags.ShaderResource,
             usage: GraphicsResourceUsage.Default);
 

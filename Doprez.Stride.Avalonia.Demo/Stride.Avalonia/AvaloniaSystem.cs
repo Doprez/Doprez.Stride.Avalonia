@@ -64,7 +64,7 @@ public class AvaloniaSystem : GameSystemBase
     protected override void LoadContent()
     {
         _input = Services.GetService<InputManager>()!;
-        AvaloniaApp.EnsureInitialized();
+        AvaloniaApp.EnsureInitialized(GraphicsDevice);
 
         if (_input.Keyboard is ITextInputDevice textDevice)
             textDevice.EnabledTextInput();
@@ -228,6 +228,50 @@ public class AvaloniaSystem : GameSystemBase
 
             if (anyDirty)
             {
+                // Ensure render surfaces are correctly sized BEFORE the
+                // compositor renders.  On the first frame, TryCreateRenderTarget
+                // creates a 1×1 fallback surface; this loop sizes it to the
+                // panel's actual resolution so that the compositor renders at
+                // the correct dimensions.
+                foreach (var comp in components)
+                {
+                    if (comp.Enabled && comp.Page != null && comp.Page.IsReady)
+                    {
+                        int resW = (int)comp.Resolution.X;
+                        int resH = (int)comp.Resolution.Y;
+                        if (comp.IsFullScreen && GraphicsDevice?.Presenter?.BackBuffer != null)
+                        {
+                            resW = GraphicsDevice.Presenter.BackBuffer.Width;
+                            resH = GraphicsDevice.Presenter.BackBuffer.Height;
+                        }
+                        if (resW > 0 && resH > 0)
+                        {
+                            comp.Page.Resize(resW, resH);
+                            comp.Page.EnsureGpuSurface(GraphicsDevice);
+                        }
+
+                        // Re-dirty the window for the compositor when:
+                        // • A VkImage capture failed (NeedsRecapture) — the
+                        //   retry path in BeginRenderingSession will fire.
+                        // • The surface was never successfully rendered
+                        //   (RenderVersion == 0 with a texture ready) — this
+                        //   catches windows whose compositor dirty flag was
+                        //   consumed by an early RunJobs/layout pass before
+                        //   ForceRenderTimerTick could render them.
+                        var surface = comp.Page.RenderSurface;
+                        if (surface != null &&
+                            (surface.NeedsRecapture ||
+                             (surface.RenderVersion == 0 && surface.StrideTexture != null)))
+                            comp.Page.Window?.InvalidateVisual();
+                    }
+                }
+
+                // Flush any pending layout/measure jobs queued by the
+                // InvalidateVisual calls above.  Without this, the
+                // compositor may not see recently-invalidated windows
+                // as needing a render pass on this tick.
+                Dispatcher.UIThread.RunJobs();
+
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             }
             else
@@ -447,6 +491,8 @@ public class AvaloniaSystem : GameSystemBase
     {
         if (_input?.Keyboard is ITextInputDevice textDevice)
             textDevice.DisableTextInput();
+
+        StridePlatformGraphics.BeginShutdown();
 
         foreach (var comp in CollectComponents())
             comp.Page?.Dispose();

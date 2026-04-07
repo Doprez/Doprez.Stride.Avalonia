@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Diagnostics;
 
@@ -38,9 +40,6 @@ public sealed class AvaloniaRenderMetrics
     /// <summary>Accumulated time calling <c>CaptureFrame()</c> this frame (ms).</summary>
     public double FrameCaptureMs { get; internal set; }
 
-    /// <summary>Accumulated time uploading textures via <c>SetData()</c> this frame (ms).</summary>
-    public double TextureUploadMs { get; internal set; }
-
     /// <summary>Accumulated time in SpriteBatch draw calls this frame (ms).</summary>
     public double SpriteBatchDrawMs { get; internal set; }
 
@@ -57,9 +56,6 @@ public sealed class AvaloniaRenderMetrics
 
     /// <summary>Number of dirty panels skipped due to the per-frame budget.</summary>
     public int PanelsDirtySkipped { get; internal set; }
-
-    /// <summary>Total bytes uploaded to GPU this frame.</summary>
-    public long BytesUploaded { get; internal set; }
 
     /// <summary>Number of atlas textures currently allocated.</summary>
     public int AtlasCount { get; internal set; }
@@ -184,14 +180,12 @@ public sealed class AvaloniaRenderMetrics
         DrawTotalMs = 0;
         DrawCollectSortMs = 0;
         FrameCaptureMs = 0;
-        TextureUploadMs = 0;
         SpriteBatchDrawMs = 0;
 
         PanelsDrawn = 0;
         PanelsCulled = 0;
         PanelsDirtyUpdated = 0;
         PanelsDirtySkipped = 0;
-        BytesUploaded = 0;
         SkippedRenderTicks = 0;
     }
 
@@ -211,14 +205,12 @@ public sealed class AvaloniaRenderMetrics
         Console.WriteLine($"║  Draw total          : {DrawTotalMs,8:F3} ms               ║");
         Console.WriteLine($"║    Collect + sort     : {DrawCollectSortMs,8:F3} ms               ║");
         Console.WriteLine($"║    Frame capture      : {FrameCaptureMs,8:F3} ms               ║");
-        Console.WriteLine($"║    Texture upload     : {TextureUploadMs,8:F3} ms               ║");
         Console.WriteLine($"║    SpriteBatch draw   : {SpriteBatchDrawMs,8:F3} ms               ║");
         Console.WriteLine("╠══════════════════════════════════════════════════════╣");
         Console.WriteLine($"║  Panels drawn        : {PanelsDrawn,6}                   ║");
         Console.WriteLine($"║  Panels culled       : {PanelsCulled,6}                   ║");
-        Console.WriteLine($"║  Dirty updated       : {PanelsDirtyUpdated,6}                   ║");
+        Console.WriteLine($"║  Dirty refreshed     : {PanelsDirtyUpdated,6}                   ║");
         Console.WriteLine($"║  Dirty skipped       : {PanelsDirtySkipped,6}                   ║");
-        Console.WriteLine($"║  Bytes uploaded      : {BytesUploaded,10}               ║");
         Console.WriteLine("╠══════════════════════════════════════════════════════╣");
         Console.WriteLine($"║  GC Gen0 / Gen1 / Gen2 : {GcGen0} / {GcGen1} / {GcGen2}              ║");
         Console.WriteLine($"║  GC delta (last frame) : {GcDelta0} / {GcDelta1} / {GcDelta2}              ║");
