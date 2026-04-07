@@ -466,6 +466,11 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
 
                 if (_useGpuCopy)
                 {
+                    // Complete deferred VkImage capture — Skia allocates VkImages
+                    // lazily during the first draw/flush, not during SKSurface.Create.
+                    if (_surface.IsVkImageCaptureInProgress)
+                        _surface.CompleteVkImageCapture();
+
                     _surface.GpuCopySkiaToStride();
                 }
                 else

@@ -55,6 +55,10 @@ internal static unsafe class StrideVulkanInterop
     private static IntPtr _realVkCreateImagePtr;
     private static long _capturedVkImage;
     private static volatile bool _captureMode;
+    private static uint _captureWidth;
+    private static uint _captureHeight;
+    private static long _interceptCallCount;
+    private static bool _loggedInterception;
 
     /// <summary>
     /// The graphics queue family index discovered during GRContext creation.
@@ -556,7 +560,7 @@ internal static unsafe class StrideVulkanInterop
             ? VkPipelineStageFlags.AllCommands
             : state.PipelineStageMask;
 
-    private static void ApplyImageState(Texture texture, VulkanImageState state)
+    internal static void ApplyImageState(Texture texture, VulkanImageState state)
     {
         EnsureTextureReflection(texture);
 
@@ -779,7 +783,13 @@ internal static unsafe class StrideVulkanInterop
                     if (name == "vkCreateImage")
                     {
                         _realVkCreateImagePtr = addr;
-                        return (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, VkImageCreateInfo*, VkAllocationCallbacks*, ulong*, VkResult>)&InterceptVkCreateImage;
+                        var interceptor = (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, VkImageCreateInfo*, VkAllocationCallbacks*, ulong*, VkResult>)&InterceptVkCreateImage;
+                        if (!_loggedInterception)
+                        {
+                            Console.Error.WriteLine("[Stride.Avalonia] vkCreateImage interceptor installed for VkImage capture");
+                            _loggedInterception = true;
+                        }
+                        return interceptor;
                     }
                     return addr;
                 }
@@ -814,22 +824,36 @@ internal static unsafe class StrideVulkanInterop
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static unsafe VkResult InterceptVkCreateImage(IntPtr device, VkImageCreateInfo* pCreateInfo, VkAllocationCallbacks* pAllocator, ulong* pImage)
     {
+        Interlocked.Increment(ref _interceptCallCount);
         var realFn = (delegate* unmanaged[Cdecl]<IntPtr, VkImageCreateInfo*, VkAllocationCallbacks*, ulong*, VkResult>)_realVkCreateImagePtr;
         var result = realFn(device, pCreateInfo, pAllocator, pImage);
         if (result == VkResult.Success && _captureMode)
         {
-            Interlocked.Exchange(ref _capturedVkImage, unchecked((long)*pImage));
+            // Only capture color attachment images matching our expected surface dimensions.
+            // This prevents cross-contamination when multiple surfaces are rendered
+            // in the same compositor pass.
+            var usage = pCreateInfo->usage;
+            var w = pCreateInfo->extent.width;
+            var h = pCreateInfo->extent.height;
+            if ((usage & VkImageUsageFlags.ColorAttachment) != 0
+                && w == _captureWidth && h == _captureHeight)
+            {
+                Interlocked.Exchange(ref _capturedVkImage, unchecked((long)*pImage));
+            }
         }
         return result;
     }
 
     /// <summary>
     /// Begins VkImage capture mode. The next VkImage created through the
-    /// intercepted vkCreateImage will be captured.
+    /// intercepted vkCreateImage that matches the given dimensions and has
+    /// COLOR_ATTACHMENT usage will be captured.
     /// </summary>
-    internal static void BeginVkImageCapture()
+    internal static void BeginVkImageCapture(uint width, uint height)
     {
         Interlocked.Exchange(ref _capturedVkImage, 0);
+        _captureWidth = width;
+        _captureHeight = height;
         _captureMode = true;
     }
 
@@ -903,20 +927,23 @@ internal static unsafe class StrideVulkanInterop
                     0, null,
                     2, barriers);
 
-                // vkCmdCopyImage
-                var region = new VkImageCopy
+                // vkCmdBlitImage — copies with Y-flip because Skia's
+                // managed Vulkan surfaces store pixels bottom-up.
+                var blit = new VkImageBlit
                 {
                     srcSubresource = new VkImageSubresourceLayers(VkImageAspectFlags.Color, 0, 0, 1),
-                    srcOffset = new VkOffset3D(0, 0, 0),
                     dstSubresource = new VkImageSubresourceLayers(VkImageAspectFlags.Color, 0, 0, 1),
-                    dstOffset = new VkOffset3D(0, 0, 0),
-                    extent = new VkExtent3D((uint)width, (uint)height, 1),
                 };
-                vkCmdCopyImage(
+                blit.srcOffsets[0] = new VkOffset3D(0, height, 0);
+                blit.srcOffsets[1] = new VkOffset3D(width, 0, 1);
+                blit.dstOffsets[0] = new VkOffset3D(0, 0, 0);
+                blit.dstOffsets[1] = new VkOffset3D(width, height, 1);
+                vkCmdBlitImage(
                     commandBuffer,
                     srcImageHandle, VkImageLayout.TransferSrcOptimal,
                     dstImageHandle, VkImageLayout.TransferDstOptimal,
-                    1, &region);
+                    1, &blit,
+                    VkFilter.Nearest);
 
                 // Barriers: src TRANSFER_SRC_OPTIMAL → COLOR_ATTACHMENT_OPTIMAL,
                 //           dst TRANSFER_DST_OPTIMAL → SHADER_READ_ONLY_OPTIMAL

@@ -17,10 +17,12 @@ internal sealed class StrideRenderSurface : IDisposable
     private int _width;
     private int _height;
     private bool _isTearingDown;
+    private bool _loggedGpuCopy;
 
     // Skia-managed surface for the Vulkan GPU copy path
     private SKSurface? _skiaManagedSurface;
     private ulong _skiaVkImageHandle;
+    private bool _vkImageCaptureInProgress;
 
     /// <summary>Width of the rendering surface in pixels.</summary>
     public int Width => _width;
@@ -120,14 +122,32 @@ internal sealed class StrideRenderSurface : IDisposable
                 if (_skiaManagedSurface == null || _skiaManagedSurface.Handle == IntPtr.Zero)
                 {
                     _skiaManagedSurface?.Dispose();
-                    StrideVulkanInterop.BeginVkImageCapture();
+                    // Start VkImage capture — Skia allocates the VkImage lazily
+                    // during the first draw/flush, NOT during SKSurface.Create().
+                    // Capture mode stays on until after the first session flush.
+                    StrideVulkanInterop.BeginVkImageCapture(
+                        (uint)_strideTexture.Width, (uint)_strideTexture.Height);
+                    _vkImageCaptureInProgress = true;
                     _skiaManagedSurface = SKSurface.Create(
                         grContext,
                         false,
                         new SKImageInfo(_strideTexture.Width, _strideTexture.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
-                    _skiaVkImageHandle = StrideVulkanInterop.EndVkImageCapture();
                     if (_skiaManagedSurface == null)
+                    {
+                        _vkImageCaptureInProgress = false;
+                        StrideVulkanInterop.EndVkImageCapture();
                         throw new InvalidOperationException("SkiaSharp failed to create a GPU-backed SKSurface.");
+                    }
+                }
+                else if (_skiaVkImageHandle == 0 && !_vkImageCaptureInProgress
+                    && _strideTexture.Width > 1 && _strideTexture.Height > 1)
+                {
+                    // Surface exists but VkImage not yet captured — re-enable capture.
+                    // Skip retry for 1x1 surfaces (pre-resize fallbacks that Skia
+                    // doesn't allocate matching VkImages for).
+                    StrideVulkanInterop.BeginVkImageCapture(
+                        (uint)_strideTexture.Width, (uint)_strideTexture.Height);
+                    _vkImageCaptureInProgress = true;
                 }
 
                 return (_skiaManagedSurface, grContext, null, null, false);
@@ -179,6 +199,25 @@ internal sealed class StrideRenderSurface : IDisposable
     }
 
     /// <summary>
+    /// Whether a VkImage capture is pending completion after the first render flush.
+    /// </summary>
+    internal bool IsVkImageCaptureInProgress => _vkImageCaptureInProgress;
+
+    /// <summary>
+    /// Completes a pending VkImage capture. Must be called after the first
+    /// session flush when the capture was started.
+    /// </summary>
+    internal void CompleteVkImageCapture()
+    {
+        if (!_vkImageCaptureInProgress) return;
+        _skiaVkImageHandle = StrideVulkanInterop.EndVkImageCapture();
+        _vkImageCaptureInProgress = false;
+        // Only log for real surfaces, not 1x1 pre-resize fallbacks
+        if (_skiaVkImageHandle != 0 && _width > 1 && _height > 1)
+            Console.Error.WriteLine($"[Stride.Avalonia] VkImage captured: {_width}x{_height} handle=0x{_skiaVkImageHandle:X}");
+    }
+
+    /// <summary>
     /// Performs a GPU-to-GPU copy from the Skia-managed surface's VkImage
     /// to the Stride-owned texture.
     /// </summary>
@@ -194,6 +233,24 @@ internal sealed class StrideRenderSurface : IDisposable
             dstImage,
             _strideTexture.Width,
             _strideTexture.Height);
+
+        // Sync Stride's internal layout tracking with the actual GPU state.
+        // GpuCopyImage transitions the dst image to ShaderReadOnlyOptimal.
+        // Without this, Stride would re-transition from the stale tracked
+        // layout (e.g. Undefined), which discards the copied pixel data.
+        StrideVulkanInterop.ApplyImageState(_strideTexture,
+            new StrideVulkanInterop.VulkanImageState(
+                Vortice.Vulkan.VkImageLayout.ShaderReadOnlyOptimal,
+                Vortice.Vulkan.VkAccessFlags.InputAttachmentRead | Vortice.Vulkan.VkAccessFlags.ShaderRead,
+                Vortice.Vulkan.VkPipelineStageFlags.FragmentShader,
+                StrideVulkanInterop.GraphicsQueueFamilyIndex,
+                Vortice.Vulkan.VkImageAspectFlags.Color));
+
+        if (!_loggedGpuCopy && _strideTexture.Width > 1 && _strideTexture.Height > 1)
+        {
+            Console.Error.WriteLine($"[Stride.Avalonia] GPU copy active: {_strideTexture.Width}x{_strideTexture.Height}");
+            _loggedGpuCopy = true;
+        }
     }
 
     public void CompleteSharedRenderingSession(StrideVulkanInterop.SharedImageSyncScope syncScope)
@@ -261,9 +318,16 @@ internal sealed class StrideRenderSurface : IDisposable
 
     private void ReleaseResources(bool disposeTexture)
     {
+        if (_vkImageCaptureInProgress)
+        {
+            StrideVulkanInterop.EndVkImageCapture();
+            _vkImageCaptureInProgress = false;
+        }
+
         _skiaManagedSurface?.Dispose();
         _skiaManagedSurface = null;
         _skiaVkImageHandle = 0;
+        _loggedGpuCopy = false;
 
         if (disposeTexture)
         {
