@@ -249,8 +249,28 @@ public class AvaloniaSystem : GameSystemBase
                             comp.Page.Resize(resW, resH);
                             comp.Page.EnsureGpuSurface(GraphicsDevice);
                         }
+
+                        // Re-dirty the window for the compositor when:
+                        // • A VkImage capture failed (NeedsRecapture) — the
+                        //   retry path in BeginRenderingSession will fire.
+                        // • The surface was never successfully rendered
+                        //   (RenderVersion == 0 with a texture ready) — this
+                        //   catches windows whose compositor dirty flag was
+                        //   consumed by an early RunJobs/layout pass before
+                        //   ForceRenderTimerTick could render them.
+                        var surface = comp.Page.RenderSurface;
+                        if (surface != null &&
+                            (surface.NeedsRecapture ||
+                             (surface.RenderVersion == 0 && surface.StrideTexture != null)))
+                            comp.Page.Window?.InvalidateVisual();
                     }
                 }
+
+                // Flush any pending layout/measure jobs queued by the
+                // InvalidateVisual calls above.  Without this, the
+                // compositor may not see recently-invalidated windows
+                // as needing a render pass on this tick.
+                Dispatcher.UIThread.RunJobs();
 
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             }

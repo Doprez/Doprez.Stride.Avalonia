@@ -53,12 +53,18 @@ internal static unsafe class StrideVulkanInterop
 
     // VkImage interception for Skia-managed surfaces
     private static IntPtr _realVkCreateImagePtr;
-    private static long _capturedVkImage;
     private static volatile bool _captureMode;
+    // Per-capture-session slot.  Each BeginVkImageCapture gets a unique token.
+    // The interceptor stores the VkImage handle for the active capture dimensions.
+    // EndVkImageCapture claims the handle only if the token matches.
+    private static long _captureToken;
+    private static long _activeCaptureToken;
     private static uint _captureWidth;
     private static uint _captureHeight;
+    private static ulong _capturedImageHandle;
     private static long _interceptCallCount;
     private static bool _loggedInterception;
+    private static bool _loggedInterceptDiag;
 
     /// <summary>
     /// The graphics queue family index discovered during GRContext creation.
@@ -829,41 +835,53 @@ internal static unsafe class StrideVulkanInterop
         var result = realFn(device, pCreateInfo, pAllocator, pImage);
         if (result == VkResult.Success && _captureMode)
         {
-            // Only capture color attachment images matching our expected surface dimensions.
-            // This prevents cross-contamination when multiple surfaces are rendered
-            // in the same compositor pass.
-            var usage = pCreateInfo->usage;
             var w = pCreateInfo->extent.width;
             var h = pCreateInfo->extent.height;
-            if ((usage & VkImageUsageFlags.ColorAttachment) != 0
-                && w == _captureWidth && h == _captureHeight)
+            var usage = pCreateInfo->usage;
+
+            // Check if this VkImage matches the active capture dimensions.
+            // Only capture images with ColorAttachment usage — this is the
+            // render target Skia draws into.  Skia may also create a
+            // depth/stencil buffer with the same dimensions; capturing that
+            // would cause the blit to read from the wrong image.
+            if (w == _captureWidth && h == _captureHeight
+                && (usage & VkImageUsageFlags.ColorAttachment) != 0)
             {
-                Interlocked.Exchange(ref _capturedVkImage, unchecked((long)*pImage));
+                _capturedImageHandle = *pImage;
             }
         }
         return result;
     }
 
     /// <summary>
-    /// Begins VkImage capture mode. The next VkImage created through the
-    /// intercepted vkCreateImage that matches the given dimensions and has
-    /// COLOR_ATTACHMENT usage will be captured.
+    /// Begins VkImage capture for a single surface.  Returns a token that
+    /// must be passed to <see cref="EndVkImageCapture"/> to claim the result.
+    /// Only one capture may be active at a time (compositor renders sequentially).
     /// </summary>
-    internal static void BeginVkImageCapture(uint width, uint height)
+    internal static long BeginVkImageCapture(uint width, uint height)
     {
-        Interlocked.Exchange(ref _capturedVkImage, 0);
+        var token = Interlocked.Increment(ref _captureToken);
+        _activeCaptureToken = token;
         _captureWidth = width;
         _captureHeight = height;
+        _capturedImageHandle = 0;
         _captureMode = true;
+        return token;
     }
 
     /// <summary>
-    /// Ends VkImage capture mode and returns the captured VkImage handle.
+    /// Ends VkImage capture and returns the captured handle (0 if none).
+    /// The token must match the one from <see cref="BeginVkImageCapture"/>.
     /// </summary>
-    internal static ulong EndVkImageCapture()
+    internal static ulong EndVkImageCapture(long token)
     {
+        if (_activeCaptureToken != token)
+            return 0; // stale/mismatched — another capture superseded this one
+
         _captureMode = false;
-        return unchecked((ulong)Interlocked.Read(ref _capturedVkImage));
+        var handle = _capturedImageHandle;
+        _capturedImageHandle = 0;
+        return handle;
     }
 
     /// <summary>

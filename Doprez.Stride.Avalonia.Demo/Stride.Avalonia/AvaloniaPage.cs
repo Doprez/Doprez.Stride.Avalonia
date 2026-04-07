@@ -113,8 +113,22 @@ public abstract class AvaloniaPage : IDisposable
 
         _window.Show();
 
+        // Pre-create and size the render surface BEFORE RunJobs triggers
+        // the compositor.  Without this, the compositor's TryCreateRenderTarget
+        // creates a 0×0 surface, and BeginRenderingSession falls back to 1×1
+        // — a size too small for reliable VkImage capture.  The compositor then
+        // considers the window clean, making subsequent InvalidateVisual calls
+        // insufficient to trigger a re-render at the correct resolution.
+        _renderSurface = StridePlatformGraphics.FindSurface(_window.PlatformImpl);
+        if (_renderSurface != null && width > 0 && height > 0)
+            _renderSurface.EnsureSize(width, height);
+
+        // Invalidate so the compositor renders this window on the
+        // next ForceRenderTimerTick — without this, headless windows
+        // that were never rendered stay "clean" and are skipped.
+        _window.InvalidateVisual();
+
         Dispatcher.UIThread.RunJobs();
-        _renderSurface ??= StridePlatformGraphics.FindSurface(_window.PlatformImpl);
     }
 
     /// <summary>
@@ -141,6 +155,11 @@ public abstract class AvaloniaPage : IDisposable
         {
             surface.EnsureSize(width, height);
             _isDirty = true;
+
+            // The compositor may have rendered at a wrong size (e.g. 1x1
+            // fallback).  Invalidate the visual tree so the compositor
+            // re-renders at the correct dimensions on the next tick.
+            _window?.InvalidateVisual();
         }
 
         if ((int)_window.Width != width || (int)_window.Height != height)

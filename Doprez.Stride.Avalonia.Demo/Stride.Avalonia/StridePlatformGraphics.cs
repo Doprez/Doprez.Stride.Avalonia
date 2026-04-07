@@ -272,8 +272,10 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
 
         foreach (var s in surfaces)
         {
-            if (SurfaceMap.TryGetValue(s, out var surface))
-                return surface;
+            // Use GetOrAdd so the surface is eagerly registered the
+            // first time FindSurface is called — not only when the
+            // compositor eventually calls TryCreateRenderTarget.
+            return SurfaceMap.GetOrAdd(s, static _ => new StrideRenderSurface());
         }
 
         return null;
@@ -357,12 +359,24 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
 
     private sealed class StrideSkiaGpu : ISkiaGpu
     {
+        private static int _createRenderTargetCount;
+        private static bool _loggedCreateRenderTargetCount;
+
         public bool IsLost => false;
         public void Dispose() { }
         public IDisposable EnsureCurrent() => NoOp.Instance;
 
         public ISkiaGpuRenderTarget? TryCreateRenderTarget(IEnumerable<object> surfaces)
         {
+            _createRenderTargetCount++;
+            if (!_loggedCreateRenderTargetCount && _createRenderTargetCount % 100 == 0)
+            {
+                System.Console.Error.WriteLine(
+                    $"[Stride.Avalonia] TryCreateRenderTarget called {_createRenderTargetCount} times, SurfaceMap has {SurfaceMap.Count} entries");
+                if (_createRenderTargetCount >= 1000)
+                    _loggedCreateRenderTargetCount = true;
+            }
+
             foreach (var s in surfaces)
             {
                 var renderSurface = SurfaceMap.GetOrAdd(s, static _ => new StrideRenderSurface());
@@ -464,6 +478,7 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
                 _grContext?.Flush();
                 _grContext?.Submit(true);
 
+                bool gpuCopyOk = true;
                 if (_useGpuCopy)
                 {
                     // Complete deferred VkImage capture — Skia allocates VkImages
@@ -471,7 +486,7 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
                     if (_surface.IsVkImageCaptureInProgress)
                         _surface.CompleteVkImageCapture();
 
-                    _surface.GpuCopySkiaToStride();
+                    gpuCopyOk = _surface.GpuCopySkiaToStride();
                 }
                 else
                 {
@@ -486,7 +501,12 @@ internal sealed class StridePlatformGraphics : IPlatformGraphics
                     }
                 }
 
-                _surface.MarkRendered();
+                // Only bump the render version when the texture was actually
+                // updated.  If the GPU copy was skipped (VkImage capture
+                // failed), leaving the version unchanged lets the pipeline
+                // detect the stale surface and retry.
+                if (gpuCopyOk)
+                    _surface.MarkRendered();
             }
             finally
             {
