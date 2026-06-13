@@ -63,14 +63,14 @@ The repository also includes a dockable editor shell (hierarchy, properties insp
 Add the `Stride.Avalonia` package to your Stride game project:
 
 ```xml
-<PackageReference Include="Stride.Avalonia" Version="*" />
+<PackageReference Include="Doprez.Stride.Avalonia" Version="*" />
 ```
 
 For the editor shell, also add:
 
 ```xml
-<PackageReference Include="Stride.Avalonia.Editor" Version="*" />
-<PackageReference Include="Stride.Avalonia.Editor.Controls" Version="*" />
+<PackageReference Include="Doprez.Stride.Avalonia.Editor" Version="*" />
+<PackageReference Include="Doprez.Stride.Avalonia.Editor.Controls" Version="*" />
 ```
 
 ### 2. Create an Avalonia Application Class
