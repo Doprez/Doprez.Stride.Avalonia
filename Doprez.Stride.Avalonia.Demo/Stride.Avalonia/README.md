@@ -64,7 +64,7 @@ Core bridge library that enables rendering Avalonia UI controls inside the Strid
 | Avalonia | 11.3.* |
 | Avalonia.Desktop | 11.3.* |
 | Avalonia.Headless | 11.3.* |
-| Stride.Engine | 4.3.0.2507 |
+| Stride.Engine | 4.4.0-beta2 |
 
 ## Target Framework
 

@@ -83,7 +83,7 @@ public class MyComponent : EntityComponent, IEditableComponent
 | Avalonia | 11.3.* |
 | FluentAvaloniaUI | 2.* |
 | ThemeEditor.Controls.ColorPicker | 11.* |
-| Stride.Engine | 4.3.0.2507 |
+| Stride.Engine | 4.4.0-beta2 |
 
 **Project References:** `Stride.Avalonia`
 

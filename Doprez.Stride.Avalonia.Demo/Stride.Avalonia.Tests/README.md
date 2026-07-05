@@ -31,7 +31,7 @@ dotnet run --project Stride.Avalonia.Tests
 |---------|---------|
 | Avalonia.Desktop | 11.3.* |
 | Avalonia.Themes.Fluent | 11.3.* |
-| Stride.Engine | 4.3.0.2507 |
+| Stride.Engine | 4.4.0-beta2 |
 | Stride.CommunityToolkit | 1.0.0-preview.62 |
 
 **Project References:** `Stride.Avalonia`

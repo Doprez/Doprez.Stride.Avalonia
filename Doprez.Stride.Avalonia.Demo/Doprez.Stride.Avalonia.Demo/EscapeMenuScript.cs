@@ -107,11 +107,15 @@ public class EscapeMenuScript : SyncScript
                     window.IsBorderLess = true;
                     // Stretch to fill the current screen
                     var adapter = device.Adapter;
-                    if (adapter?.Outputs != null && adapter.Outputs.Length > 0)
+                    if (adapter != null && adapter.Outputs.Length > 0)
                     {
-                        var displayMode = adapter.Outputs[0].CurrentDisplayMode;
-                        window.SetSize(new Int2(displayMode.Width, displayMode.Height));
-                        window.Position = Int2.Zero;
+                        var currentDisplayMode = adapter.Outputs[0].CurrentDisplayMode;
+                        if (currentDisplayMode.HasValue)
+                        {
+                            var dm = currentDisplayMode.Value;
+                            window.SetSize(new Int2(dm.Width, dm.Height));
+                            window.Position = Int2.Zero;
+                        }
                     }
                     break;
 

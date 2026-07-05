@@ -5,16 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Stride.Engine" Version="4.3.0.2507" />
+    <PackageReference Include="Stride.Engine" Version="4.4.0-beta2" />
 
-    <PackageReference Include="Stride.Video" Version="4.3.0.2507" />
-    <PackageReference Include="Stride.Physics" Version="4.3.0.2507" />
-    <PackageReference Include="Stride.Navigation" Version="4.3.0.2507" />
-    <PackageReference Include="Stride.Particles" Version="4.3.0.2507" />
-    <PackageReference Include="Stride.UI" Version="4.3.0.2507" />
-
-    <PackageReference Include="Stride.Core.Assets.CompilerApp" Version="4.3.0.2507" IncludeAssets="build;buildTransitive" />
-    <PackageReference Include="Stride.Shaders.Compiler" Version="4.3.0.2507" />
+    <PackageReference Include="Stride.Video" Version="4.4.0-beta2" />
+    <PackageReference Include="Stride.Physics" Version="4.4.0-beta2" />
+    <PackageReference Include="Stride.Navigation" Version="4.4.0-beta2" />
+    <PackageReference Include="Stride.Particles" Version="4.4.0-beta2" />
+    <PackageReference Include="Stride.UI" Version="4.4.0-beta2" />
   </ItemGroup>
 
   <ItemGroup>
