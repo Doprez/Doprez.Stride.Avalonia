@@ -8,7 +8,7 @@
     <!-- NuGet package metadata -->
     <IsPackable>true</IsPackable>
     <PackageId>Doprez.Stride.Avalonia</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>Doprez</Authors>
     <Description>Core bridge for rendering Avalonia UI inside a Stride 3D application via headless offscreen rendering. Supports fullscreen HUD overlays, world-space 3D panels, input forwarding, texture atlas batching, and profiling.</Description>
     <PackageTags>stride;stride3d;avalonia;gamedev;ui;hud;overlay;3d</PackageTags>
