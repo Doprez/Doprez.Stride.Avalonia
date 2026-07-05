@@ -53,7 +53,7 @@ The repository also includes a dockable editor shell (hierarchy, properties insp
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- [Stride 4.3](https://www.stride3d.net/download/) (NuGet packages `4.3.0.2507`)
+- [Stride 4.3](https://www.stride3d.net/download/) (NuGet packages `4.4.0-beta2`)
 - [Avalonia 11.3](https://avaloniaui.net/) (pulled automatically via NuGet)
 
 ## Getting Started

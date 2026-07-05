@@ -60,9 +60,9 @@ A dockable editor shell for inspecting and manipulating Stride scenes at runtime
 | Dock.Avalonia | 11.3.* |
 | Dock.Model.Avalonia | 11.3.* |
 | Dock.Avalonia.Themes.Fluent | 11.3.* |
-| Stride.Engine | 4.3.0.2507 |
-| Stride.Rendering | 4.3.0.2507 |
-| Stride.Graphics | 4.3.0.2507 |
+| Stride.Engine | 4.4.0-beta2 |
+| Stride.Rendering | 4.4.0-beta2 |
+| Stride.Graphics | 4.4.0-beta2 |
 
 **Project References:** `Stride.Avalonia`, `Stride.Avalonia.Editor.Controls`
 

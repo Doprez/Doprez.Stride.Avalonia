@@ -65,8 +65,8 @@ dotnet run --project Doprez.Stride.Avalonia.Demo.Linux
 
 | Package | Version |
 |---------|---------|
-| Stride.Engine | 4.3.0.2507 |
-| Stride.Video / Physics / Navigation / Particles / UI | 4.3.0.2507 |
+| Stride.Engine | 4.4.0-beta2 |
+| Stride.Video / Physics / Navigation / Particles / UI | 4.4.0-beta2 |
 | Avalonia.Themes.Fluent | 11.3.* |
 
 **Project References:** `Stride.Avalonia`

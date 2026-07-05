@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Stride.Engine" Version="4.3.0.2507" PrivateAssets="contentfiles;analyzers" />
+    <PackageReference Include="Stride.Engine" Version="4.4.0-beta2" PrivateAssets="contentfiles;analyzers" />
   </ItemGroup>
 
   <ItemGroup>
