@@ -144,6 +144,18 @@ public class AvaloniaSystem : GameSystemBase
         long t1 = Stopwatch.GetTimestamp();
         using (Profiler.Begin(AvaloniaProfilingKeys.InputProcessing))
         {
+            // Disabled components must never retain keyboard focus. Avalonia's
+            // KeyboardDevice tracks a single global focused element, so a key
+            // event forwarded to any enabled window is routed to that element —
+            // even if it lives on a disabled page. Clear focus owned by disabled
+            // pages first so their controls can't be triggered (e.g. Space
+            // activating a focused button on a disabled overlay).
+            foreach (var comp in components)
+            {
+                if (!comp.Enabled && comp.Page is { IsReady: true } disabledPage)
+                    disabledPage.ClearFocusIfOwned();
+            }
+
             foreach (var comp in components)
             {
                 if (!comp.Enabled || comp.Page == null || !comp.Page.IsReady) continue;

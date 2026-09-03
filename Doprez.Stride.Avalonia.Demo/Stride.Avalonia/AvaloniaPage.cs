@@ -7,6 +7,7 @@ using global::Avalonia.Media;
 using global::Avalonia.Media.Imaging;
 using global::Avalonia.Platform;
 using global::Avalonia.Threading;
+using global::Avalonia.VisualTree;
 using Stride.Core;
 
 namespace Stride.Avalonia;
@@ -70,6 +71,32 @@ public abstract class AvaloniaPage : IDisposable
     /// Marks the page as needing a fresh capture on the next render pass.
     /// </summary>
     public void MarkDirty() => _isDirty = true;
+
+    /// <summary>
+    /// Clears the global keyboard focus if the currently focused element
+    /// belongs to this page's window.
+    /// <para>
+    /// Avalonia's <c>KeyboardDevice</c> tracks a single, application-wide
+    /// focused element, and a key event forwarded to <em>any</em> window is
+    /// routed to that element. If this page is disabled but still owns the
+    /// focus, keystrokes sent to other (enabled) pages would keep activating
+    /// this page's controls (e.g. pressing Space triggers a focused button).
+    /// Clearing focus while the page is disabled prevents that leakage.
+    /// </para>
+    /// </summary>
+    public void ClearFocusIfOwned()
+    {
+        if (_window == null) return;
+
+        var focusManager = _window.FocusManager;
+        if (focusManager == null) return;
+
+        if (focusManager.GetFocusedElement() is Visual focused
+            && ReferenceEquals(focused.GetVisualRoot(), _window))
+        {
+            focusManager.ClearFocus();
+        }
+    }
 
     /// <summary>
     /// Creates and shows the headless window at the given pixel resolution.
